@@ -357,6 +357,17 @@ public class NettyBasicHttpsPureNettyTest {
                 }
             }
         }
+
+        @Override
+        public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
+            ResponseFuture responseFuture = responseFutureAttr(ctx.pipeline()).get();
+
+            if (responseFuture != null) {
+                responseFuture.set(cause);
+            }
+
+            ctx.fireExceptionCaught(cause);
+        }
     }
 
     static class ResponseFuture implements Future<Response> {
