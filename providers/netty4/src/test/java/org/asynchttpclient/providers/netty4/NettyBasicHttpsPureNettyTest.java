@@ -40,6 +40,7 @@ import java.io.RandomAccessFile;
 import java.net.ServerSocket;
 import java.net.URI;
 import java.net.URL;
+import java.nio.channels.ClosedChannelException;
 import java.security.GeneralSecurityException;
 import java.security.KeyStore;
 import java.security.SecureRandom;
@@ -356,6 +357,17 @@ public class NettyBasicHttpsPureNettyTest {
                     }
                 }
             }
+        }
+        
+        @Override
+        public void channelInactive(ChannelHandlerContext ctx) throws Exception {
+            
+            ResponseFuture responseFuture = responseFutureAttr(ctx.pipeline()).get();
+            if (responseFuture != null) {
+                responseFuture.set(new RuntimeException("How come the channel was closed?!, How can I properly trap this upstream?"));
+            }
+            
+            ctx.fireChannelInactive();
         }
 
         @Override
