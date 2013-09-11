@@ -454,12 +454,12 @@ public class NettyBasicHttpsPureNettyTest {
         }
     }
 
-    private ChannelFuture connect(Bootstrap b, String url, final ResponseFuture responseFuture) throws InterruptedException {
+    private void connectThenPerformRequest(Bootstrap b, String url, final ResponseFuture responseFuture, final RequestPerformer requestPerformer) throws InterruptedException {
 
         URI uri = URI.create(url);
 
         // FIXME handle connect timeout exception
-        return b.connect(uri.getHost(), uri.getPort()).sync().addListener(new GenericFutureListener<ChannelFuture>() {
+        b.connect(uri.getHost(), uri.getPort()).sync().addListener(new GenericFutureListener<ChannelFuture>() {
             @Override
             public void operationComplete(ChannelFuture future) throws Exception {
                 LOGGER.info("Connect future complete");
@@ -467,42 +467,51 @@ public class NettyBasicHttpsPureNettyTest {
                     LOGGER.error("Connect failed", future.cause());
                     responseFuture.set(future.cause());
                 } else {
-                    future.channel().pipeline().get(SslHandler.class).handshakeFuture().addListener(new GenericFutureListener<io.netty.util.concurrent.Future<Channel>>() {
+                    final Channel ch = future.channel();
+                    if (!ch.isActive()) {
+                        responseFuture.set(new Exception("Channel is not active after connect"));
+                    } else if (!ch.isOpen()) {
+                        responseFuture.set(new Exception("Channel is not open after connect"));
+                    } else {
+                        LOGGER.info("Channel properly open and active, performing request");
+                        future.channel().pipeline().get(SslHandler.class).handshakeFuture().addListener(new GenericFutureListener<io.netty.util.concurrent.Future<Channel>>() {
 
-                        @Override
-                        public void operationComplete(io.netty.util.concurrent.Future<Channel> f) throws Exception {
-                            if (!f.isSuccess()) {
-                                LOGGER.error("Handshake failed", f.cause());
-                                responseFuture.set(f.cause());
+                            @Override
+                            public void operationComplete(io.netty.util.concurrent.Future<Channel> f) throws Exception {
+                                if (!f.isSuccess()) {
+                                    Throwable cause = f.cause();
+                                    if (cause.getCause() != null) {
+                                        cause = cause.getCause();
+                                    }
+
+                                    LOGGER.error("Handshake failed", cause);
+                                    responseFuture.set(f.cause());
+                                } else {
+                                    MyChannelInboundHandlerAdapter.responseFutureAttr(ch.pipeline()).set(responseFuture);
+                                    requestPerformer.performRequest(ch);
+                                }
                             }
-                        }
-                    });
+                        });
+                    }
                 }
             }
         });
     }
 
+    private static interface RequestPerformer {
+
+        void performRequest(Channel ch) throws Exception;
+    }
+
     private ResponseFuture post(Bootstrap b, String url, final String string) throws InterruptedException {
 
-        URI uri = URI.create(url);
+        final URI uri = URI.create(url);
         final ResponseFuture responseFuture = new ResponseFuture();
 
-        ChannelFuture connectFuture = connect(b, url, responseFuture);
-
-        if (!responseFuture.isDone()) {
-            Channel ch = connectFuture.channel();
-
-            LOGGER.info("Performing request");
-            if (!ch.isActive()) {
-                responseFuture.set(new Exception("Channel is not active after connect"));
-            } else if (!ch.isOpen()) {
-                responseFuture.set(new Exception("Channel is not open after connect"));
-            } else {
-                LOGGER.info("Channel properly open and active");
-                MyChannelInboundHandlerAdapter.responseFutureAttr(ch.pipeline()).set(responseFuture);
-
+        RequestPerformer requestPerformer = new RequestPerformer() {
+            @Override
+            public void performRequest(Channel ch) {
                 byte[] bodyBytes = string.getBytes(CharsetUtil.UTF_8);
-
                 HttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, uri.getPath(), Unpooled.wrappedBuffer(bodyBytes));
                 request.headers()/**/
                 .set(HttpHeaders.Names.CONTENT_TYPE, "text/html")/**/
@@ -521,7 +530,9 @@ public class NettyBasicHttpsPureNettyTest {
                     }
                 });
             }
-        }
+        };
+
+        connectThenPerformRequest(b, url, responseFuture, requestPerformer);
 
         return responseFuture;
     }
@@ -549,23 +560,12 @@ public class NettyBasicHttpsPureNettyTest {
 
     private ResponseFuture post(Bootstrap b, String url, final File file) throws Exception {
 
-        URI uri = URI.create(url);
-        ResponseFuture responseFuture = new ResponseFuture();
+        final URI uri = URI.create(url);
+        final ResponseFuture responseFuture = new ResponseFuture();
 
-        ChannelFuture connectFuture = connect(b, url, responseFuture);
-
-        if (!responseFuture.isDone()) {
-            Channel ch = connectFuture.channel();
-
-            LOGGER.info("Performing request");
-            if (!ch.isActive()) {
-                responseFuture.set(new Exception("Channel is not active after connect"));
-            } else if (!ch.isOpen()) {
-                responseFuture.set(new Exception("Channel is not open after connect"));
-            } else {
-                LOGGER.info("Channel properly open and active");
-                MyChannelInboundHandlerAdapter.responseFutureAttr(ch.pipeline()).set(responseFuture);
-
+        RequestPerformer requestPerformer = new RequestPerformer() {
+            @Override
+            public void performRequest(Channel ch) throws Exception {
                 HttpRequest request = new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, uri.getPath());
                 request.headers()/**/
                 .set(HttpHeaders.Names.CONTENT_TYPE, "text/html")/**/
@@ -591,7 +591,10 @@ public class NettyBasicHttpsPureNettyTest {
 
                 ch.writeAndFlush(LastHttpContent.EMPTY_LAST_CONTENT);
             }
-        }
+        };
+
+        connectThenPerformRequest(b, url, responseFuture, requestPerformer);
+
         return responseFuture;
     }
 
