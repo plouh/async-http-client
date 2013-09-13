@@ -454,12 +454,15 @@ public class NettyBasicHttpsPureNettyTest {
         }
     }
 
-    private void connectThenPerformRequest(Bootstrap b, String url, final ResponseFuture responseFuture, final RequestPerformer requestPerformer) throws InterruptedException {
+    private Channel connect(Bootstrap b, String url, final ResponseFuture responseFuture) throws InterruptedException {
 
         URI uri = URI.create(url);
 
-        // FIXME handle connect timeout exception
-        b.connect(uri.getHost(), uri.getPort()).sync().addListener(new GenericFutureListener<ChannelFuture>() {
+        ChannelFuture f = b.connect(uri.getHost(), uri.getPort()).sync();
+        
+        MyChannelInboundHandlerAdapter.responseFutureAttr(f.channel().pipeline()).set(responseFuture);
+
+        f.addListener(new GenericFutureListener<ChannelFuture>() {
             @Override
             public void operationComplete(ChannelFuture future) throws Exception {
                 LOGGER.info("Connect future complete");
@@ -485,10 +488,7 @@ public class NettyBasicHttpsPureNettyTest {
                                     }
 
                                     LOGGER.error("Handshake failed", cause);
-                                    responseFuture.set(f.cause());
-                                } else {
-                                    MyChannelInboundHandlerAdapter.responseFutureAttr(ch.pipeline()).set(responseFuture);
-                                    requestPerformer.performRequest(ch);
+                                    responseFuture.set(cause);
                                 }
                             }
                         });
@@ -496,11 +496,8 @@ public class NettyBasicHttpsPureNettyTest {
                 }
             }
         });
-    }
 
-    private static interface RequestPerformer {
-
-        void performRequest(Channel ch) throws Exception;
+        return f.channel();
     }
 
     private ResponseFuture post(Bootstrap b, String url, final String string) throws InterruptedException {
@@ -508,31 +505,26 @@ public class NettyBasicHttpsPureNettyTest {
         final URI uri = URI.create(url);
         final ResponseFuture responseFuture = new ResponseFuture();
 
-        RequestPerformer requestPerformer = new RequestPerformer() {
+        Channel ch = connect(b, url, responseFuture);
+
+        byte[] bodyBytes = string.getBytes(CharsetUtil.UTF_8);
+        HttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, uri.getPath(), Unpooled.wrappedBuffer(bodyBytes));
+        request.headers()/**/
+        .set(HttpHeaders.Names.CONTENT_TYPE, "text/html")/**/
+        .set(HttpHeaders.Names.HOST, uri.getHost())/**/
+        .set(HttpHeaders.Names.ACCEPT, "*/*")/**/
+        .set(HttpHeaders.Names.CONTENT_LENGTH, bodyBytes.length);
+
+        ch.writeAndFlush(request).addListener(new GenericFutureListener<ChannelFuture>() {
             @Override
-            public void performRequest(Channel ch) {
-                byte[] bodyBytes = string.getBytes(CharsetUtil.UTF_8);
-                HttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, uri.getPath(), Unpooled.wrappedBuffer(bodyBytes));
-                request.headers()/**/
-                .set(HttpHeaders.Names.CONTENT_TYPE, "text/html")/**/
-                .set(HttpHeaders.Names.HOST, uri.getHost())/**/
-                .set(HttpHeaders.Names.ACCEPT, "*/*")/**/
-                .set(HttpHeaders.Names.CONTENT_LENGTH, bodyBytes.length);
-
-                ch.writeAndFlush(request).addListener(new GenericFutureListener<ChannelFuture>() {
-                    @Override
-                    public void operationComplete(ChannelFuture future) throws Exception {
-                        if (!future.isSuccess()) {
-                            ResponseFuture responseFuture = MyChannelInboundHandlerAdapter.responseFutureAttr(future.channel().pipeline()).getAndRemove();
-                            responseFuture.set(future.cause());
-                            MyChannelInboundHandlerAdapter.responseAttr(future.channel().pipeline()).remove();
-                        }
-                    }
-                });
+            public void operationComplete(ChannelFuture future) throws Exception {
+                if (!future.isSuccess()) {
+                    ResponseFuture responseFuture = MyChannelInboundHandlerAdapter.responseFutureAttr(future.channel().pipeline()).getAndRemove();
+                    responseFuture.set(future.cause());
+                    MyChannelInboundHandlerAdapter.responseAttr(future.channel().pipeline()).remove();
+                }
             }
-        };
-
-        connectThenPerformRequest(b, url, responseFuture, requestPerformer);
+        });
 
         return responseFuture;
     }
@@ -563,37 +555,32 @@ public class NettyBasicHttpsPureNettyTest {
         final URI uri = URI.create(url);
         final ResponseFuture responseFuture = new ResponseFuture();
 
-        RequestPerformer requestPerformer = new RequestPerformer() {
-            @Override
-            public void performRequest(Channel ch) throws Exception {
-                HttpRequest request = new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, uri.getPath());
-                request.headers()/**/
-                .set(HttpHeaders.Names.CONTENT_TYPE, "text/html")/**/
-                .set(HttpHeaders.Names.HOST, uri.getHost())/**/
-                .set(HttpHeaders.Names.ACCEPT, "*/*")/**/
-                .set(HttpHeaders.Names.CONTENT_LENGTH, file.length());
+        Channel ch = connect(b, url, responseFuture);
 
-                ch.writeAndFlush(request);
-                RandomAccessFile raf = new RandomAccessFile(file, "r");
-                ch.write(new ChunkedFile(raf, 0, file.length(), 8 * 1024))/**/
-                // FIXME DefaultFileRegion not working over HTTPS?
-                // ch.write(new DefaultFileRegion(raf.getChannel(), 0, file.length()))/**/
-                        .addListener(new GenericFutureListener<ChannelFuture>() {
-                            @Override
-                            public void operationComplete(ChannelFuture future) throws Exception {
-                                if (!future.isSuccess()) {
-                                    ResponseFuture responseFuture = MyChannelInboundHandlerAdapter.responseFutureAttr(future.channel().pipeline()).getAndRemove();
-                                    responseFuture.set(future.cause());
-                                    MyChannelInboundHandlerAdapter.responseAttr(future.channel().pipeline()).remove();
-                                }
-                            }
-                        });
+        HttpRequest request = new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, uri.getPath());
+        request.headers()/**/
+        .set(HttpHeaders.Names.CONTENT_TYPE, "text/html")/**/
+        .set(HttpHeaders.Names.HOST, uri.getHost())/**/
+        .set(HttpHeaders.Names.ACCEPT, "*/*")/**/
+        .set(HttpHeaders.Names.CONTENT_LENGTH, file.length());
 
-                ch.writeAndFlush(LastHttpContent.EMPTY_LAST_CONTENT);
-            }
-        };
+        ch.writeAndFlush(request);
+        RandomAccessFile raf = new RandomAccessFile(file, "r");
+        ch.write(new ChunkedFile(raf, 0, file.length(), 8 * 1024))/**/
+        // FIXME DefaultFileRegion not working over HTTPS?
+        // ch.write(new DefaultFileRegion(raf.getChannel(), 0, file.length()))/**/
+                .addListener(new GenericFutureListener<ChannelFuture>() {
+                    @Override
+                    public void operationComplete(ChannelFuture future) throws Exception {
+                        if (!future.isSuccess()) {
+                            ResponseFuture responseFuture = MyChannelInboundHandlerAdapter.responseFutureAttr(future.channel().pipeline()).getAndRemove();
+                            responseFuture.set(future.cause());
+                            MyChannelInboundHandlerAdapter.responseAttr(future.channel().pipeline()).remove();
+                        }
+                    }
+                });
 
-        connectThenPerformRequest(b, url, responseFuture, requestPerformer);
+        ch.writeAndFlush(LastHttpContent.EMPTY_LAST_CONTENT);
 
         return responseFuture;
     }
