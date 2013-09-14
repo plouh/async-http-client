@@ -37,11 +37,10 @@ import org.asynchttpclient.HttpResponseBodyPart;
 import org.asynchttpclient.HttpResponseHeaders;
 import org.asynchttpclient.HttpResponseStatus;
 import org.asynchttpclient.Response;
-import org.eclipse.jetty.server.Connector;
 import org.eclipse.jetty.server.Request;
 import org.eclipse.jetty.server.Server;
+import org.eclipse.jetty.server.ServerConnector;
 import org.eclipse.jetty.server.handler.AbstractHandler;
-import org.eclipse.jetty.server.nio.SelectChannelConnector;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.testng.Assert;
@@ -82,10 +81,10 @@ public abstract class AbstractBasicTest {
             for (int i = 0; i < repeat; i++) {
                 out.write(pattern);
             }
-            
+
             long expectedFileSize = PATTERN_BYTES.length * repeat;
             Assert.assertEquals(expectedFileSize, tmpFile.length(), "Invalid file length");
-            
+
             return tmpFile;
         } finally {
             if (out != null) {
@@ -192,14 +191,13 @@ public abstract class AbstractBasicTest {
         port1 = findFreePort();
         port2 = findFreePort();
 
-        Connector listener = new SelectChannelConnector();
-
+        ServerConnector listener = new ServerConnector(server);
         listener.setHost("127.0.0.1");
         listener.setPort(port1);
 
         server.addConnector(listener);
 
-        listener = new SelectChannelConnector();
+        listener = new ServerConnector(server);
         listener.setHost("127.0.0.1");
         listener.setPort(port2);
 

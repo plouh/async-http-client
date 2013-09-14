@@ -12,22 +12,7 @@
  */
 package org.asynchttpclient.async;
 
-import org.asynchttpclient.AsyncCompletionHandlerBase;
-import org.asynchttpclient.AsyncHttpClient;
-import org.asynchttpclient.AsyncHttpClientConfig;
-import org.asynchttpclient.ProxyServer;
-import org.asynchttpclient.RequestBuilder;
-import org.asynchttpclient.Response;
-import org.asynchttpclient.SimpleAsyncHttpClient;
-import org.eclipse.jetty.server.Connector;
-import org.eclipse.jetty.server.Server;
-import org.eclipse.jetty.server.handler.AbstractHandler;
-import org.eclipse.jetty.server.handler.ProxyHandler;
-import org.eclipse.jetty.server.nio.SelectChannelConnector;
-import org.eclipse.jetty.server.ssl.SslSocketConnector;
-import org.testng.annotations.AfterClass;
-import org.testng.annotations.BeforeClass;
-import org.testng.annotations.Test;
+import static org.testng.Assert.assertEquals;
 
 import java.io.File;
 import java.io.IOException;
@@ -36,59 +21,91 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeoutException;
 
-import static org.testng.Assert.assertEquals;
+import org.asynchttpclient.AsyncCompletionHandlerBase;
+import org.asynchttpclient.AsyncHttpClient;
+import org.asynchttpclient.AsyncHttpClientConfig;
+import org.asynchttpclient.ProxyServer;
+import org.asynchttpclient.RequestBuilder;
+import org.asynchttpclient.Response;
+import org.asynchttpclient.SimpleAsyncHttpClient;
+import org.eclipse.jetty.proxy.ConnectHandler;
+import org.eclipse.jetty.server.HttpConfiguration;
+import org.eclipse.jetty.server.HttpConnectionFactory;
+import org.eclipse.jetty.server.SecureRequestCustomizer;
+import org.eclipse.jetty.server.Server;
+import org.eclipse.jetty.server.ServerConnector;
+import org.eclipse.jetty.server.SslConnectionFactory;
+import org.eclipse.jetty.server.handler.AbstractHandler;
+import org.eclipse.jetty.util.ssl.SslContextFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.testng.annotations.AfterClass;
+import org.testng.annotations.BeforeClass;
+import org.testng.annotations.Test;
 
 /**
  * Proxy usage tests.
  */
-@SuppressWarnings("deprecation")
 public abstract class ProxyTunnellingTest extends AbstractBasicTest {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(ProxyTunnellingTest.class);
 
     private Server server2;
 
     public abstract String getProviderClass();
 
     public AbstractHandler configureHandler() throws Exception {
-        ProxyHandler proxy = new ProxyHandler();
-        return proxy;
+        return new ConnectHandler();
     }
 
     @BeforeClass(alwaysRun = true)
     public void setUpGlobal() throws Exception {
+
         server = new Server();
         server2 = new Server();
-
         port1 = findFreePort();
         port2 = findFreePort();
 
-        Connector listener = new SelectChannelConnector();
-
+        ServerConnector listener = new ServerConnector(server);
         listener.setHost("127.0.0.1");
         listener.setPort(port1);
 
         server.addConnector(listener);
 
-        SslSocketConnector connector = new SslSocketConnector();
-        connector.setHost("127.0.0.1");
-        connector.setPort(port2);
-
-        ClassLoader cl = getClass().getClassLoader();
-        URL keystoreUrl = cl.getResource("ssltest-keystore.jks");
-        String keyStoreFile = new File(keystoreUrl.toURI()).getAbsolutePath();
-        connector.setKeystore(keyStoreFile);
-        connector.setKeyPassword("changeit");
-        connector.setKeystoreType("JKS");
-
-        server2.addConnector(connector);
-
         server.setHandler(configureHandler());
         server.start();
 
+        ClassLoader cl = getClass().getClassLoader();
+
+        URL keystoreUrl = cl.getResource("ssltest-keystore.jks");
+        String keyStoreFile = new File(keystoreUrl.toURI()).getAbsolutePath();
+        LOGGER.info("SSL keystore path: {}", keyStoreFile);
+        SslContextFactory sslContextFactory = new SslContextFactory(keyStoreFile);
+        sslContextFactory.setKeyStorePassword("changeit");
+
+        String trustStoreFile = new File(cl.getResource("ssltest-cacerts.jks").toURI()).getAbsolutePath();
+        LOGGER.info("SSL certs path: {}", trustStoreFile);
+        sslContextFactory.setTrustStorePath(trustStoreFile);
+        sslContextFactory.setTrustStorePassword("changeit");
+
+        HttpConfiguration http_config = new HttpConfiguration();
+        http_config.setSecureScheme("https");
+        http_config.setSecurePort(port2);
+
+        HttpConfiguration https_config = new HttpConfiguration(http_config);
+        https_config.addCustomizer(new SecureRequestCustomizer());
+
+        ServerConnector connector = new ServerConnector(server2, new SslConnectionFactory(sslContextFactory, "http/1.1"), new HttpConnectionFactory(https_config));
+        connector.setHost("127.0.0.1");
+        connector.setPort(port2);
+        server2.addConnector(connector);
+
         server2.setHandler(new EchoHandler());
         server2.start();
+
         log.info("Local HTTP server started successfully");
     }
-    
+
     @AfterClass(alwaysRun = true)
     public void tearDownGlobal() throws Exception {
         server.stop();
@@ -161,7 +178,8 @@ public abstract class ProxyTunnellingTest extends AbstractBasicTest {
     @Test(groups = { "online", "default_provider" })
     public void testSimpleAHCConfigProxy() throws IOException, InterruptedException, ExecutionException, TimeoutException {
 
-        SimpleAsyncHttpClient client = new SimpleAsyncHttpClient.Builder().setProviderClass(getProviderClass()).setProxyProtocol(ProxyServer.Protocol.HTTPS).setProxyHost("127.0.0.1").setProxyPort(port1).setFollowRedirects(true).setUrl(getTargetUrl2()).setHeader("Content-Type", "text/html").build();
+        SimpleAsyncHttpClient client = new SimpleAsyncHttpClient.Builder().setProviderClass(getProviderClass()).setProxyProtocol(ProxyServer.Protocol.HTTPS)
+                .setProxyHost("127.0.0.1").setProxyPort(port1).setFollowRedirects(true).setUrl(getTargetUrl2()).setHeader("Content-Type", "text/html").build();
         try {
             Response r = client.get().get();
 

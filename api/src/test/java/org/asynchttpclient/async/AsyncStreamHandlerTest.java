@@ -40,7 +40,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public abstract class AsyncStreamHandlerTest extends AbstractBasicTest {
     
     private static final String RESPONSE = "param_1_";
-    private static final String UTF8 = "text/html;charset=utf-8";
+    private static final String UTF8 = "text/html; charset=utf-8";
 
     @Test(groups = { "standalone", "default_provider" })
     public void asyncStreamGETTest() throws Throwable {

@@ -26,11 +26,10 @@ import javax.servlet.http.HttpServletResponse;
 
 import org.asynchttpclient.AsyncHttpClient;
 import org.asynchttpclient.AsyncHttpClientConfig;
-import org.eclipse.jetty.server.Connector;
 import org.eclipse.jetty.server.Request;
 import org.eclipse.jetty.server.Server;
+import org.eclipse.jetty.server.ServerConnector;
 import org.eclipse.jetty.server.handler.AbstractHandler;
-import org.eclipse.jetty.server.nio.SelectChannelConnector;
 import org.testng.annotations.BeforeClass;
 import org.testng.annotations.Test;
 
@@ -56,7 +55,7 @@ public abstract class IdleStateHandlerTest extends AbstractBasicTest {
         server = new Server();
 
         port1 = findFreePort();
-        Connector listener = new SelectChannelConnector();
+        ServerConnector listener = new ServerConnector(server);
 
         listener.setHost("127.0.0.1");
         listener.setPort(port1);

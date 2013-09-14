@@ -70,10 +70,14 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
 import org.apache.commons.io.IOUtils;
+import org.eclipse.jetty.server.HttpConfiguration;
+import org.eclipse.jetty.server.HttpConnectionFactory;
 import org.eclipse.jetty.server.Request;
+import org.eclipse.jetty.server.SecureRequestCustomizer;
 import org.eclipse.jetty.server.Server;
+import org.eclipse.jetty.server.ServerConnector;
+import org.eclipse.jetty.server.SslConnectionFactory;
 import org.eclipse.jetty.server.handler.AbstractHandler;
-import org.eclipse.jetty.server.ssl.SslSocketConnector;
 import org.eclipse.jetty.util.ssl.SslContextFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -179,6 +183,7 @@ public class NettyBasicHttpsPureNettyTest {
 
         public JettyServer(int port) throws Exception {
             server = new Server();
+
             ClassLoader cl = getClass().getClassLoader();
 
             URL keystoreUrl = cl.getResource("ssltest-keystore.jks");
@@ -189,10 +194,17 @@ public class NettyBasicHttpsPureNettyTest {
 
             String trustStoreFile = new File(cl.getResource("ssltest-cacerts.jks").toURI()).getAbsolutePath();
             LOGGER.info("SSL certs path: {}", trustStoreFile);
-            sslContextFactory.setTrustStore(trustStoreFile);
+            sslContextFactory.setTrustStorePath(trustStoreFile);
             sslContextFactory.setTrustStorePassword("changeit");
+            
+            HttpConfiguration http_config = new HttpConfiguration();
+            http_config.setSecureScheme("https");
+            http_config.setSecurePort(port);
 
-            SslSocketConnector connector = new SslSocketConnector(sslContextFactory);
+            HttpConfiguration https_config = new HttpConfiguration(http_config);
+            https_config.addCustomizer(new SecureRequestCustomizer());
+            
+            ServerConnector connector = new ServerConnector(server, new SslConnectionFactory(sslContextFactory, "http/1.1"), new HttpConnectionFactory(https_config));
             connector.setHost("127.0.0.1");
             connector.setPort(port);
             server.addConnector(connector);

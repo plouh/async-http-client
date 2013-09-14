@@ -53,9 +53,8 @@ import org.asynchttpclient.RequestBuilder;
 import org.asynchttpclient.Response;
 import org.asynchttpclient.StringPart;
 import org.asynchttpclient.util.AsyncHttpProviderUtils;
-import org.eclipse.jetty.server.Connector;
 import org.eclipse.jetty.server.Server;
-import org.eclipse.jetty.server.nio.SelectChannelConnector;
+import org.eclipse.jetty.server.ServerConnector;
 import org.eclipse.jetty.servlet.ServletContextHandler;
 import org.eclipse.jetty.servlet.ServletHolder;
 import org.testng.annotations.BeforeClass;
@@ -74,7 +73,7 @@ public abstract class MultipartUploadTest extends AbstractBasicTest {
 
         port1 = findFreePort();
 
-        Connector listener = new SelectChannelConnector();
+        ServerConnector listener = new ServerConnector(server);
         listener.setHost("localhost");
         listener.setPort(port1);
 

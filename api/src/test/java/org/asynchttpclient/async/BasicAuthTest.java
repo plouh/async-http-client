@@ -15,40 +15,7 @@
  */
 package org.asynchttpclient.async;
 
-import org.asynchttpclient.AsyncHandler;
-import org.asynchttpclient.AsyncHttpClient;
-import org.asynchttpclient.AsyncHttpClientConfig;
-import org.asynchttpclient.HttpResponseBodyPart;
-import org.asynchttpclient.HttpResponseHeaders;
-import org.asynchttpclient.HttpResponseStatus;
-import org.asynchttpclient.Realm;
-import org.asynchttpclient.Response;
-import org.asynchttpclient.SimpleAsyncHttpClient;
-import org.asynchttpclient.consumers.AppendableBodyConsumer;
-import org.asynchttpclient.generators.InputStreamBodyGenerator;
-import org.apache.log4j.ConsoleAppender;
-import org.apache.log4j.Level;
-import org.apache.log4j.Logger;
-import org.apache.log4j.PatternLayout;
-import org.eclipse.jetty.security.ConstraintMapping;
-import org.eclipse.jetty.security.ConstraintSecurityHandler;
-import org.eclipse.jetty.security.HashLoginService;
-import org.eclipse.jetty.security.LoginService;
-import org.eclipse.jetty.security.authentication.BasicAuthenticator;
-import org.eclipse.jetty.security.authentication.DigestAuthenticator;
-import org.eclipse.jetty.server.Connector;
-import org.eclipse.jetty.server.Request;
-import org.eclipse.jetty.server.Server;
-import org.eclipse.jetty.server.handler.AbstractHandler;
-import org.eclipse.jetty.server.nio.SelectChannelConnector;
-import org.eclipse.jetty.util.security.Constraint;
-import org.testng.annotations.AfterClass;
-import org.testng.annotations.BeforeClass;
-import org.testng.annotations.Test;
-
-import javax.servlet.ServletException;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
+import static org.testng.Assert.*;
 
 import java.io.ByteArrayInputStream;
 import java.io.File;
@@ -64,8 +31,39 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
-import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.assertNotNull;
+import javax.servlet.ServletException;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+
+import org.apache.log4j.ConsoleAppender;
+import org.apache.log4j.Level;
+import org.apache.log4j.Logger;
+import org.apache.log4j.PatternLayout;
+import org.asynchttpclient.AsyncHandler;
+import org.asynchttpclient.AsyncHttpClient;
+import org.asynchttpclient.AsyncHttpClientConfig;
+import org.asynchttpclient.HttpResponseBodyPart;
+import org.asynchttpclient.HttpResponseHeaders;
+import org.asynchttpclient.HttpResponseStatus;
+import org.asynchttpclient.Realm;
+import org.asynchttpclient.Response;
+import org.asynchttpclient.SimpleAsyncHttpClient;
+import org.asynchttpclient.consumers.AppendableBodyConsumer;
+import org.asynchttpclient.generators.InputStreamBodyGenerator;
+import org.eclipse.jetty.security.ConstraintMapping;
+import org.eclipse.jetty.security.ConstraintSecurityHandler;
+import org.eclipse.jetty.security.HashLoginService;
+import org.eclipse.jetty.security.LoginService;
+import org.eclipse.jetty.security.authentication.BasicAuthenticator;
+import org.eclipse.jetty.security.authentication.DigestAuthenticator;
+import org.eclipse.jetty.server.Request;
+import org.eclipse.jetty.server.Server;
+import org.eclipse.jetty.server.ServerConnector;
+import org.eclipse.jetty.server.handler.AbstractHandler;
+import org.eclipse.jetty.util.security.Constraint;
+import org.testng.annotations.AfterClass;
+import org.testng.annotations.BeforeClass;
+import org.testng.annotations.Test;
 
 public abstract class BasicAuthTest extends AbstractBasicTest {
 
@@ -86,7 +84,7 @@ public abstract class BasicAuthTest extends AbstractBasicTest {
         root.addAppender(new ConsoleAppender(new PatternLayout(PatternLayout.TTCC_CONVERSION_PATTERN)));
 
         port1 = findFreePort();
-        Connector listener = new SelectChannelConnector();
+        ServerConnector listener = new ServerConnector(server);
 
         listener.setHost("127.0.0.1");
         listener.setPort(port1);
@@ -129,7 +127,7 @@ public abstract class BasicAuthTest extends AbstractBasicTest {
         server2 = new Server();
         port2 = findFreePort();
 
-        SelectChannelConnector connector = new SelectChannelConnector();
+        ServerConnector connector = new ServerConnector(server2);
         connector.setHost("127.0.0.1");
         connector.setPort(port2);
 

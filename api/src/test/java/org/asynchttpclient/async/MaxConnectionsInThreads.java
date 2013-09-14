@@ -16,20 +16,8 @@
  */
 package org.asynchttpclient.async;
 
-import org.asynchttpclient.AsyncHttpClient;
-import org.asynchttpclient.AsyncHttpClientConfig;
-import org.eclipse.jetty.server.Connector;
-import org.eclipse.jetty.server.Server;
-import org.eclipse.jetty.server.nio.SelectChannelConnector;
-import org.eclipse.jetty.servlet.ServletContextHandler;
-import org.eclipse.jetty.servlet.ServletHolder;
-import org.testng.annotations.BeforeClass;
-import org.testng.annotations.Test;
+import static org.testng.AssertJUnit.assertTrue;
 
-import javax.servlet.ServletException;
-import javax.servlet.http.HttpServlet;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.URI;
@@ -37,7 +25,19 @@ import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.List;
 
-import static org.testng.AssertJUnit.assertTrue;
+import javax.servlet.ServletException;
+import javax.servlet.http.HttpServlet;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+
+import org.asynchttpclient.AsyncHttpClient;
+import org.asynchttpclient.AsyncHttpClientConfig;
+import org.eclipse.jetty.server.Server;
+import org.eclipse.jetty.server.ServerConnector;
+import org.eclipse.jetty.servlet.ServletContextHandler;
+import org.eclipse.jetty.servlet.ServletHolder;
+import org.testng.annotations.BeforeClass;
+import org.testng.annotations.Test;
 
 abstract public class MaxConnectionsInThreads extends AbstractBasicTest {
 
@@ -130,7 +130,7 @@ abstract public class MaxConnectionsInThreads extends AbstractBasicTest {
 
         port1 = findFreePort();
 
-        Connector listener = new SelectChannelConnector();
+        ServerConnector listener = new ServerConnector(server);
         listener.setHost("127.0.0.1");
         listener.setPort(port1);
 

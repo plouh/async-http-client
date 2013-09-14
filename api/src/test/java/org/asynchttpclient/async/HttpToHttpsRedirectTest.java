@@ -30,12 +30,15 @@ import javax.servlet.http.HttpServletResponse;
 import org.asynchttpclient.AsyncHttpClient;
 import org.asynchttpclient.AsyncHttpClientConfig;
 import org.asynchttpclient.Response;
-import org.eclipse.jetty.server.Connector;
+import org.eclipse.jetty.server.HttpConfiguration;
+import org.eclipse.jetty.server.HttpConnectionFactory;
 import org.eclipse.jetty.server.Request;
+import org.eclipse.jetty.server.SecureRequestCustomizer;
 import org.eclipse.jetty.server.Server;
+import org.eclipse.jetty.server.ServerConnector;
+import org.eclipse.jetty.server.SslConnectionFactory;
 import org.eclipse.jetty.server.handler.AbstractHandler;
-import org.eclipse.jetty.server.nio.SelectChannelConnector;
-import org.eclipse.jetty.server.ssl.SslSocketConnector;
+import org.eclipse.jetty.util.ssl.SslContextFactory;
 import org.testng.annotations.BeforeClass;
 import org.testng.annotations.Test;
 
@@ -80,35 +83,34 @@ public abstract class HttpToHttpsRedirectTest extends AbstractBasicTest {
         port1 = findFreePort();
         port2 = findFreePort();
 
-        Connector listener = new SelectChannelConnector();
+        ServerConnector listener = new ServerConnector(server);
 
         listener.setHost("127.0.0.1");
         listener.setPort(port1);
         server.addConnector(listener);
 
-        SslSocketConnector connector = new SslSocketConnector();
-        connector.setHost("127.0.0.1");
-        connector.setPort(port2);
-
         ClassLoader cl = getClass().getClassLoader();
-        // override system properties
-        URL cacertsUrl = cl.getResource("ssltest-cacerts.jks");
-        String trustStoreFile = new File(cacertsUrl.toURI()).getAbsolutePath();
-        connector.setTruststore(trustStoreFile);
-        connector.setTrustPassword("changeit");
-        connector.setTruststoreType("JKS");
-
-        log.info("SSL certs path: {}", trustStoreFile);
-
-        // override system properties
         URL keystoreUrl = cl.getResource("ssltest-keystore.jks");
         String keyStoreFile = new File(keystoreUrl.toURI()).getAbsolutePath();
-        connector.setKeystore(keyStoreFile);
-        connector.setKeyPassword("changeit");
-        connector.setKeystoreType("JKS");
-
         log.info("SSL keystore path: {}", keyStoreFile);
+        SslContextFactory sslContextFactory = new SslContextFactory(keyStoreFile);
+        sslContextFactory.setKeyStorePassword("changeit");
 
+        String trustStoreFile = new File(cl.getResource("ssltest-cacerts.jks").toURI()).getAbsolutePath();
+        log.info("SSL certs path: {}", trustStoreFile);
+        sslContextFactory.setTrustStorePath(trustStoreFile);
+        sslContextFactory.setTrustStorePassword("changeit");
+        
+        HttpConfiguration http_config = new HttpConfiguration();
+        http_config.setSecureScheme("https");
+        http_config.setSecurePort(port2);
+
+        HttpConfiguration https_config = new HttpConfiguration(http_config);
+        https_config.addCustomizer(new SecureRequestCustomizer());
+        
+        ServerConnector connector = new ServerConnector(server, new SslConnectionFactory(sslContextFactory, "http/1.1"), new HttpConnectionFactory(https_config));
+        connector.setHost("127.0.0.1");
+        connector.setPort(port2);
         server.addConnector(connector);
 
         server.setHandler(new Relative302Handler());

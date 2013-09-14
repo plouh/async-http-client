@@ -12,16 +12,11 @@
  */
 package org.asynchttpclient.async;
 
-import org.asynchttpclient.AsyncHttpClient;
-import org.asynchttpclient.AsyncHttpClient.BoundRequestBuilder;
-import org.asynchttpclient.Response;
-import org.eclipse.jetty.server.Connector;
-import org.eclipse.jetty.server.Request;
-import org.eclipse.jetty.server.Server;
-import org.eclipse.jetty.server.handler.AbstractHandler;
-import org.eclipse.jetty.server.nio.SelectChannelConnector;
-import org.testng.annotations.BeforeClass;
-import org.testng.annotations.Test;
+import static org.testng.Assert.assertEquals;
+
+import java.io.IOException;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
 
 import javax.servlet.ServletException;
 import javax.servlet.ServletInputStream;
@@ -29,11 +24,15 @@ import javax.servlet.ServletOutputStream;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
-import java.io.IOException;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Future;
-
-import static org.testng.Assert.assertEquals;
+import org.asynchttpclient.AsyncHttpClient;
+import org.asynchttpclient.AsyncHttpClient.BoundRequestBuilder;
+import org.asynchttpclient.Response;
+import org.eclipse.jetty.server.Request;
+import org.eclipse.jetty.server.Server;
+import org.eclipse.jetty.server.ServerConnector;
+import org.eclipse.jetty.server.handler.AbstractHandler;
+import org.testng.annotations.BeforeClass;
+import org.testng.annotations.Test;
 
 public abstract class NonAsciiContentLengthTest extends AbstractBasicTest {
 
@@ -41,7 +40,7 @@ public abstract class NonAsciiContentLengthTest extends AbstractBasicTest {
     public void setUpGlobal() throws Exception {
         server = new Server();
         port1 = findFreePort();
-        Connector listener = new SelectChannelConnector();
+        ServerConnector listener = new ServerConnector(server);
 
         listener.setHost("127.0.0.1");
         listener.setPort(port1);
