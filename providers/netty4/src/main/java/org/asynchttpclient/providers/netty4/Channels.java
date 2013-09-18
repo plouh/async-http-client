@@ -43,6 +43,8 @@ import org.asynchttpclient.AsyncHandler;
 import org.asynchttpclient.AsyncHttpClientConfig;
 import org.asynchttpclient.ConnectionPoolKeyStrategy;
 import org.asynchttpclient.ConnectionsPool;
+import org.asynchttpclient.providers.netty4.future.NettyResponseFuture;
+import org.asynchttpclient.providers.netty4.pool.NettyConnectionsPool;
 import org.asynchttpclient.providers.netty4.util.CleanupChannelGroup;
 import org.asynchttpclient.util.SslUtils;
 import org.slf4j.Logger;

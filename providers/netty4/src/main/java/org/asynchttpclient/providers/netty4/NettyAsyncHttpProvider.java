@@ -33,7 +33,7 @@ import org.slf4j.LoggerFactory;
 
 public class NettyAsyncHttpProvider implements AsyncHttpProvider {
 
-    static final Logger LOGGER = LoggerFactory.getLogger(NettyAsyncHttpProvider.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(NettyAsyncHttpProvider.class);
 
     private final AsyncHttpClientConfig config;
     private final NettyAsyncHttpProviderConfig asyncHttpProviderConfig;
@@ -58,10 +58,6 @@ public class NettyAsyncHttpProvider implements AsyncHttpProvider {
         channels.configure(channelHandler);
 
         executeConnectAsync = asyncHttpProviderConfig.isAsyncConnect();
-        // FIXME
-        // if (!executeConnectAsync) {
-        // DefaultChannelFuture.setUseDeadLockChecker(true);
-        // }
     }
 
     @Override
@@ -75,7 +71,6 @@ public class NettyAsyncHttpProvider implements AsyncHttpProvider {
         closed.set(true);
         try {
             channels.close();
-//            config.executorService().shutdown();
             config.reaper().shutdown();
         } catch (Throwable t) {
             LOGGER.warn("Unexpected error on close", t);

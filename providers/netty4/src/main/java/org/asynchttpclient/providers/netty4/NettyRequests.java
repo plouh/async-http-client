@@ -33,6 +33,7 @@ import org.asynchttpclient.ntlm.NTLMEngine;
 import org.asynchttpclient.ntlm.NTLMEngineException;
 import org.asynchttpclient.org.jboss.netty.handler.codec.http.CookieEncoder;
 import org.asynchttpclient.providers.netty4.spnego.SpnegoEngine;
+import org.asynchttpclient.providers.netty4.ws.WebSocketUtil;
 import org.asynchttpclient.util.AsyncHttpProviderUtils;
 import org.asynchttpclient.util.AuthenticatorUtils;
 import org.asynchttpclient.util.UTF8UrlEncoder;

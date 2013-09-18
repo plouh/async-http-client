@@ -1,12 +1,12 @@
 package org.asynchttpclient.providers.netty4;
 
-import static org.asynchttpclient.providers.netty4.util.HttpUtil.WEBSOCKET;
-import static org.asynchttpclient.providers.netty4.util.HttpUtil.isSecure;
+import static org.asynchttpclient.providers.netty4.util.HttpUtil.*;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelProgressiveFuture;
+import io.netty.channel.DefaultFileRegion;
 import io.netty.channel.FileRegion;
 import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpMethod;
@@ -44,6 +44,9 @@ import org.asynchttpclient.listener.TransferCompletionHandler;
 import org.asynchttpclient.listener.TransferCompletionHandler.TransferAdapter;
 import org.asynchttpclient.multipart.MultipartBody;
 import org.asynchttpclient.providers.netty4.FeedableBodyGenerator.FeedListener;
+import org.asynchttpclient.providers.netty4.future.FutureReaper;
+import org.asynchttpclient.providers.netty4.future.NettyResponseFuture;
+import org.asynchttpclient.providers.netty4.future.NettyResponseFutures;
 import org.asynchttpclient.util.AsyncHttpProviderUtils;
 import org.asynchttpclient.util.ProxyUtils;
 import org.asynchttpclient.websocket.WebSocketUpgradeHandler;
@@ -269,10 +272,10 @@ public class NettyRequestSender {
             if (Channels.getSslHandler(channel) != null) {
                 writeFuture = channel.write(new ChunkedFile(raf, 0, fileLength, Constants.MAX_BUFFERED_BYTES), channel.newProgressivePromise());
             } else {
-                // FIXME why not use io.netty.channel.DefaultFileRegion?
-                FileRegion region = new OptimizedFileRegion(raf, 0, fileLength);
+                FileRegion region = new DefaultFileRegion(raf.getChannel(), 0, fileLength);
                 writeFuture = channel.write(region, channel.newProgressivePromise());
             }
+            // FIXME probably useless in Netty 4
             writeFuture.addListener(new ProgressListener(config, false, future.getAsyncHandler(), future) {
                 public void operationComplete(ChannelProgressiveFuture cf) {
                     try {

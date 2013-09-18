@@ -10,8 +10,14 @@ import org.asynchttpclient.AsyncHandler;
 import org.asynchttpclient.AsyncHttpClientConfig;
 import org.asynchttpclient.ProgressAsyncHandler;
 import org.asynchttpclient.Realm;
+import org.asynchttpclient.providers.netty4.future.NettyResponseFuture;
+import org.asynchttpclient.providers.netty4.future.NettyResponseFutures;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class ProgressListener implements ChannelProgressiveFutureListener {
+    
+    private static final Logger LOGGER = LoggerFactory.getLogger(ProgressListener.class);
 
     private final AsyncHttpClientConfig config;
     private final boolean notifyHeaders;
@@ -28,32 +34,31 @@ public class ProgressListener implements ChannelProgressiveFutureListener {
 
     @Override
     public void operationComplete(ChannelProgressiveFuture cf) {
-        // FIXME remove this with next 4.0.9: https://github.com/netty/netty/issues/1809
         // The write operation failed. If the channel was cached, it means it got asynchronously closed.
         // Let's retry a second time.
         Throwable cause = cf.cause();
         if (cause != null && future.getState() != NettyResponseFuture.STATE.NEW) {
 
             if (cause instanceof IllegalStateException) {
-                NettyAsyncHttpProvider.LOGGER.debug(cause.getMessage(), cause);
+                LOGGER.debug(cause.getMessage(), cause);
                 try {
                     cf.channel().close();
                 } catch (RuntimeException ex) {
-                    NettyAsyncHttpProvider.LOGGER.debug(ex.getMessage(), ex);
+                    LOGGER.debug(ex.getMessage(), ex);
                 }
                 return;
             }
 
             if (cause instanceof ClosedChannelException || NettyResponseFutures.abortOnReadCloseException(cause) || NettyResponseFutures.abortOnWriteCloseException(cause)) {
 
-                if (NettyAsyncHttpProvider.LOGGER.isDebugEnabled()) {
-                    NettyAsyncHttpProvider.LOGGER.debug(cf.cause() == null ? "" : cf.cause().getMessage(), cf.cause());
+                if (LOGGER.isDebugEnabled()) {
+                    LOGGER.debug(cf.cause() == null ? "" : cf.cause().getMessage(), cf.cause());
                 }
 
                 try {
                     cf.channel().close();
                 } catch (RuntimeException ex) {
-                    NettyAsyncHttpProvider.LOGGER.debug(ex.getMessage(), ex);
+                    LOGGER.debug(ex.getMessage(), ex);
                 }
                 return;
             } else {

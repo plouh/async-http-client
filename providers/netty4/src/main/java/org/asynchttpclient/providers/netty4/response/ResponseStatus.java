@@ -14,7 +14,7 @@
  * under the License.
  *
  */
-package org.asynchttpclient.providers.netty4;
+package org.asynchttpclient.providers.netty4.response;
 
 import org.asynchttpclient.AsyncHandler;
 import org.asynchttpclient.AsyncHttpProvider;

@@ -12,6 +12,8 @@
  */
 package org.asynchttpclient.providers.netty4;
 
+import org.asynchttpclient.providers.netty4.future.NettyResponseFuture;
+
 import io.netty.channel.ChannelHandlerContext;
 
 public interface Protocol{

@@ -13,7 +13,7 @@
  * License for the specific language governing permissions and limitations
  * under the License.
  */
-package org.asynchttpclient.providers.netty4;
+package org.asynchttpclient.providers.netty4.future;
 
 import static org.asynchttpclient.util.DateUtil.millisTime;
 import io.netty.channel.Channel;
@@ -38,6 +38,8 @@ import org.asynchttpclient.ConnectionPoolKeyStrategy;
 import org.asynchttpclient.ProxyServer;
 import org.asynchttpclient.Request;
 import org.asynchttpclient.listenable.AbstractListenableFuture;
+import org.asynchttpclient.providers.netty4.Channels;
+import org.asynchttpclient.providers.netty4.DiscardEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

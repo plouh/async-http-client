@@ -10,7 +10,7 @@
  * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the Apache License Version 2.0 for the specific language governing permissions and limitations there under.
  */
-package org.asynchttpclient.providers.netty4;
+package org.asynchttpclient.providers.netty4.ws;
 
 import org.asynchttpclient.websocket.WebSocket;
 import org.asynchttpclient.websocket.WebSocketByteListener;
@@ -45,74 +45,74 @@ public class NettyWebSocket implements WebSocket {
         this.channel = channel;
     }
 
-    // @Override
+    @Override
     public WebSocket sendMessage(byte[] message) {
         channel.writeAndFlush(new BinaryWebSocketFrame(wrappedBuffer(message)));
         return this;
     }
 
-    // @Override
+    @Override
     public WebSocket stream(byte[] fragment, boolean last) {
         throw new UnsupportedOperationException("Streaming currently only supported by the Grizzly provider.");
     }
 
-    // @Override
+    @Override
     public WebSocket stream(byte[] fragment, int offset, int len, boolean last) {
         throw new UnsupportedOperationException("Streaming currently only supported by the Grizzly provider.");
     }
 
-    // @Override
+    @Override
     public WebSocket sendTextMessage(String message) {
         channel.writeAndFlush(new TextWebSocketFrame(message));
         return this;
     }
 
-    // @Override
+    @Override
     public WebSocket streamText(String fragment, boolean last) {
         throw new UnsupportedOperationException("Streaming currently only supported by the Grizzly provider.");
     }
 
-    // @Override
+    @Override
     public WebSocket sendPing(byte[] payload) {
         channel.writeAndFlush(new PingWebSocketFrame(wrappedBuffer(payload)));
         return this;
     }
 
-    // @Override
+    @Override
     public WebSocket sendPong(byte[] payload) {
         channel.writeAndFlush(new PongWebSocketFrame(wrappedBuffer(payload)));
         return this;
     }
 
-    // @Override
+    @Override
     public WebSocket addWebSocketListener(WebSocketListener l) {
         listeners.add(l);
         return this;
     }
 
-    // @Override
+    @Override
     public WebSocket removeWebSocketListener(WebSocketListener l) {
         listeners.remove(l);
         return this;
     }
 
     public int getMaxBufferSize() {
-    	return maxBufferSize;
+        return maxBufferSize;
     }
-    
+
     public void setMaxBufferSize(int bufferSize) {
-    	maxBufferSize = bufferSize;
-    	
-    	if(maxBufferSize < 8192)
-    		maxBufferSize = 8192;
+        maxBufferSize = bufferSize;
+
+        if (maxBufferSize < 8192)
+            maxBufferSize = 8192;
     }
-    
-    // @Override
+
+    @Override
     public boolean isOpen() {
         return channel.isOpen();
     }
 
-    // @Override
+    @Override
     public void close() {
         onClose();
         listeners.clear();
@@ -124,7 +124,6 @@ public class NettyWebSocket implements WebSocket {
         }
     }
 
-    // @Override
     public void close(int statusCode, String reason) {
         onClose(statusCode, reason);
         listeners.clear();
@@ -136,31 +135,30 @@ public class NettyWebSocket implements WebSocket {
         }
     }
 
-    protected void onBinaryFragment(byte[] message, boolean last) {
+    public void onBinaryFragment(byte[] message, boolean last) {
         for (WebSocketListener l : listeners) {
             if (l instanceof WebSocketByteListener) {
                 try {
-                	WebSocketByteListener.class.cast(l).onFragment(message,last);
-                	
-                	if(byteBuffer == null) {
-                		byteBuffer = new ByteArrayOutputStream();
-                	}
-                	
-                	byteBuffer.write(message);
-                	
-                	if(byteBuffer.size() > maxBufferSize) {
-                		Exception e = new Exception("Exceeded Netty Web Socket maximum buffer size of " + getMaxBufferSize());
-                        l.onError(e);
-                		this.close();
-                		return;
-                	}
-                	
+                    WebSocketByteListener.class.cast(l).onFragment(message, last);
 
-                	if(last) {
-                    	WebSocketByteListener.class.cast(l).onMessage(byteBuffer.toByteArray());
-                    	byteBuffer = null;
-                    	textBuffer = null;
-                	}
+                    if (byteBuffer == null) {
+                        byteBuffer = new ByteArrayOutputStream();
+                    }
+
+                    byteBuffer.write(message);
+
+                    if (byteBuffer.size() > maxBufferSize) {
+                        Exception e = new Exception("Exceeded Netty Web Socket maximum buffer size of " + getMaxBufferSize());
+                        l.onError(e);
+                        this.close();
+                        return;
+                    }
+
+                    if (last) {
+                        WebSocketByteListener.class.cast(l).onMessage(byteBuffer.toByteArray());
+                        byteBuffer = null;
+                        textBuffer = null;
+                    }
                 } catch (Exception ex) {
                     l.onError(ex);
                 }
@@ -168,30 +166,30 @@ public class NettyWebSocket implements WebSocket {
         }
     }
 
-    protected void onTextFragment(String message, boolean last) {
+    public void onTextFragment(String message, boolean last) {
         for (WebSocketListener l : listeners) {
             if (l instanceof WebSocketTextListener) {
                 try {
-                    WebSocketTextListener.class.cast(l).onFragment(message,last);
-                    
-                	if(textBuffer == null) {
-                		textBuffer = new StringBuilder();
-                	}
-                	
-                	textBuffer.append(message);
-                	
-                	if(textBuffer.length() > maxBufferSize) {
-                		Exception e = new Exception("Exceeded Netty Web Socket maximum buffer size of " + getMaxBufferSize());
+                    WebSocketTextListener.class.cast(l).onFragment(message, last);
+
+                    if (textBuffer == null) {
+                        textBuffer = new StringBuilder();
+                    }
+
+                    textBuffer.append(message);
+
+                    if (textBuffer.length() > maxBufferSize) {
+                        Exception e = new Exception("Exceeded Netty Web Socket maximum buffer size of " + getMaxBufferSize());
                         l.onError(e);
-                		this.close();
-                		return;
-                	}
-                	
-                	if(last) {
-                    	WebSocketTextListener.class.cast(l).onMessage(textBuffer.toString());
-                    	byteBuffer = null;
-                    	textBuffer = null;
-                	}
+                        this.close();
+                        return;
+                    }
+
+                    if (last) {
+                        WebSocketTextListener.class.cast(l).onMessage(textBuffer.toString());
+                        byteBuffer = null;
+                        textBuffer = null;
+                    }
                 } catch (Exception ex) {
                     l.onError(ex);
                 }
@@ -199,7 +197,7 @@ public class NettyWebSocket implements WebSocket {
         }
     }
 
-    protected void onError(Throwable t) {
+    public void onError(Throwable t) {
         for (WebSocketListener l : listeners) {
             try {
                 l.onError(t);
@@ -210,11 +208,11 @@ public class NettyWebSocket implements WebSocket {
         }
     }
 
-    protected void onClose() {
+    public void onClose() {
         onClose(1000, "Normal closure; the connection successfully completed whatever purpose for which it was created.");
     }
 
-    protected void onClose(int code, String reason) {
+    public void onClose(int code, String reason) {
         for (WebSocketListener l : listeners) {
             try {
                 if (l instanceof WebSocketCloseCodeReasonListener) {
@@ -229,8 +227,6 @@ public class NettyWebSocket implements WebSocket {
 
     @Override
     public String toString() {
-        return "NettyWebSocket{" +
-                "channel=" + channel +
-                '}';
+        return "NettyWebSocket{" + "channel=" + channel + '}';
     }
 }

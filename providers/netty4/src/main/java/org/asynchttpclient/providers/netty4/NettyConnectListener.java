@@ -33,6 +33,8 @@ import org.asynchttpclient.AsyncHandler;
 import org.asynchttpclient.AsyncHttpClientConfig;
 import org.asynchttpclient.ProxyServer;
 import org.asynchttpclient.Request;
+import org.asynchttpclient.providers.netty4.future.NettyResponseFuture;
+import org.asynchttpclient.providers.netty4.future.NettyResponseFutures;
 import org.asynchttpclient.util.ProxyUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

@@ -16,8 +16,8 @@ package org.asynchttpclient.providers.netty4;
 import org.asynchttpclient.Cookie;
 import org.asynchttpclient.FluentCaseInsensitiveStringsMap;
 import org.asynchttpclient.HttpResponseHeaders;
-import org.asynchttpclient.providers.netty4.NettyResponse;
-import org.asynchttpclient.providers.netty4.ResponseStatus;
+import org.asynchttpclient.providers.netty4.response.NettyResponse;
+import org.asynchttpclient.providers.netty4.response.ResponseStatus;
 import org.testng.annotations.Test;
 
 import java.text.SimpleDateFormat;

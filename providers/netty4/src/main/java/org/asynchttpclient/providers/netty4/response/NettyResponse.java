@@ -13,7 +13,7 @@
  * License for the specific language governing permissions and limitations
  * under the License.
  */
-package org.asynchttpclient.providers.netty4;
+package org.asynchttpclient.providers.netty4.response;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;

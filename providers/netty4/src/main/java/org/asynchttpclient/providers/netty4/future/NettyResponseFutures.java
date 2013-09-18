@@ -1,4 +1,4 @@
-package org.asynchttpclient.providers.netty4;
+package org.asynchttpclient.providers.netty4.future;
 
 import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpRequest;

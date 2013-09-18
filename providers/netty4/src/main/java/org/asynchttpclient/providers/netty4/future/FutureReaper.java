@@ -1,4 +1,4 @@
-package org.asynchttpclient.providers.netty4;
+package org.asynchttpclient.providers.netty4.future;
 
 import static org.asynchttpclient.util.DateUtil.millisTime;
 
@@ -9,12 +9,17 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.asynchttpclient.AsyncHttpClientConfig;
+import org.asynchttpclient.providers.netty4.Channels;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Because some implementation of the ThreadSchedulingService do not clean up cancel task until they try to run them, we wrap the task with the future so the when the NettyResponseFuture cancel the reaper future this wrapper will release the references to the channel and the
  * nettyResponseFuture immediately. Otherwise, the memory referenced this way will only be released after the request timeout period which can be arbitrary long.
  */
 public final class FutureReaper implements Runnable {
+    
+    private static final Logger LOGGER = LoggerFactory.getLogger(FutureReaper.class);
 
     private final AtomicBoolean closed;
     private final Channels channels;
@@ -70,7 +75,7 @@ public final class FutureReaper implements Runnable {
     }
 
     private void expire(String message) {
-        NettyAsyncHttpProvider.LOGGER.debug("{} for {}", message, nettyResponseFuture);
+        LOGGER.debug("{} for {}", message, nettyResponseFuture);
         channels.abort(nettyResponseFuture, new TimeoutException(message));
         nettyResponseFuture = null;
     }
