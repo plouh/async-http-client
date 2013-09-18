@@ -33,6 +33,7 @@ import org.asynchttpclient.AsyncHandler;
 import org.asynchttpclient.AsyncHttpClientConfig;
 import org.asynchttpclient.Body;
 import org.asynchttpclient.BodyGenerator;
+import org.asynchttpclient.ConnectionPoolKeyStrategy;
 import org.asynchttpclient.FluentCaseInsensitiveStringsMap;
 import org.asynchttpclient.ListenableFuture;
 import org.asynchttpclient.ProxyServer;
@@ -87,7 +88,7 @@ public class NettyRequestSender {
                 LOGGER.debug("Trying to recover request {}\n", future.getNettyRequest());
 
                 try {
-                    execute(future.getRequest(), future);
+                    sendRequest(future.getRequest(), future);
                     success = true;
 
                 } catch (IOException iox) {
@@ -104,8 +105,8 @@ public class NettyRequestSender {
 
     // FIXME Netty 3: only called from nextRequest, useCache, asyncConnect and
     // reclaimCache always passed as true
-    public <T> void execute(final Request request, final NettyResponseFuture<T> f) throws IOException {
-        doConnect(request, f.getAsyncHandler(), f, true, true, true);
+    public <T> void sendRequest(final Request request, final NettyResponseFuture<T> f) throws IOException {
+        sendRequest(request, f.getAsyncHandler(), f, true, true);
     }
 
     // FIXME is this useful? Can't we do that when building the request?
@@ -113,105 +114,114 @@ public class NettyRequestSender {
         return request.getMethod().equals(HttpMethod.GET.name()) && asyncHandler instanceof WebSocketUpgradeHandler;
     }
 
-    public <T> ListenableFuture<T> doConnect(final Request request, final AsyncHandler<T> asyncHandler, NettyResponseFuture<T> future, boolean useCache, boolean asyncConnect,
-            boolean reclaimCache) throws IOException {
+    private Channel getCachedChannel(NettyResponseFuture<?> future, URI uri, ConnectionPoolKeyStrategy poolKeyGen, ProxyServer proxyServer) {
 
-        if (closed.get()) {
-            throw new IOException("Closed");
-        }
-
-        if (request.getUrl().startsWith(WEBSOCKET) && !validateWebSocketRequest(request, asyncHandler)) {
-            throw new IOException("WebSocket method must be a GET");
-        }
-
-        ProxyServer proxyServer = ProxyUtils.getProxyServer(config, request);
-        boolean useProxy = proxyServer != null;
-
-        URI uri;
-        if (config.isUseRawUrl()) {
-            uri = request.getRawURI();
+        if (future != null && future.reuseChannel() && future.channel() != null) {
+            return future.channel();
         } else {
-            uri = request.getURI();
+            URI connectionKeyUri = proxyServer != null ? proxyServer.getURI() : uri;
+            return channels.lookupInCache(connectionKeyUri, poolKeyGen);
         }
-        Channel channel = null;
+    }
 
-        if (useCache) {
-            if (future != null && future.reuseChannel() && future.channel() != null) {
-                channel = future.channel();
-            } else {
-                URI connectionKeyUri = useProxy ? proxyServer.getURI() : uri;
-                channel = channels.lookupInCache(connectionKeyUri, request.getConnectionPoolKeyStrategy());
-            }
+    private <T> ListenableFuture<T> sendRequestWithCachedChannel(Channel channel, Request request, URI uri, ProxyServer proxy, NettyResponseFuture<T> future,
+            AsyncHandler<T> asyncHandler) throws IOException {
+        HttpRequest nettyRequest = null;
+
+        if (future == null) {
+            nettyRequest = NettyRequests.newNettyRequest(config, request, uri, false, proxy);
+            future = NettyResponseFutures.newNettyResponseFuture(uri, request, asyncHandler, nettyRequest, config, proxy);
+        } else {
+            nettyRequest = NettyRequests.newNettyRequest(config, request, uri, future.isConnectAllowed(), proxy);
+            future.setNettyRequest(nettyRequest);
         }
+        future.setState(NettyResponseFuture.STATE.POOLED);
+        future.attachChannel(channel, false);
 
-        boolean useSSl = isSecure(uri) && !useProxy;
-        if (channel != null && channel.isOpen() && channel.isActive()) {
-            HttpRequest nettyRequest = null;
+        LOGGER.debug("\nUsing cached Channel {}\n for request \n{}\n", channel, nettyRequest);
+        Channels.setDefaultAttribute(channel, future);
 
-            if (future == null) {
-                nettyRequest = NettyRequests.newNettyRequest(config, request, uri, false, proxyServer);
-                future = NettyResponseFutures.newNettyResponseFuture(uri, request, asyncHandler, nettyRequest, config, proxyServer);
+        try {
+            writeRequest(channel, config, future);
+        } catch (Exception ex) {
+            LOGGER.debug("writeRequest failure", ex);
+            if (ex.getMessage() != null && ex.getMessage().contains("SSLEngine")) {
+                LOGGER.debug("SSLEngine failure", ex);
+                future = null;
             } else {
-                nettyRequest = NettyRequests.newNettyRequest(config, request, uri, future.isConnectAllowed(), proxyServer);
-                future.setNettyRequest(nettyRequest);
-            }
-            future.setState(NettyResponseFuture.STATE.POOLED);
-            future.attachChannel(channel, false);
-
-            LOGGER.debug("\nUsing cached Channel {}\n for request \n{}\n", channel, nettyRequest);
-            Channels.setDefaultAttribute(channel, future);
-
-            try {
-                writeRequest(channel, config, future);
-            } catch (Exception ex) {
-                LOGGER.debug("writeRequest failure", ex);
-                if (useSSl && ex.getMessage() != null && ex.getMessage().contains("SSLEngine")) {
-                    LOGGER.debug("SSLEngine failure", ex);
-                    future = null;
-                } else {
-                    try {
-                        asyncHandler.onThrowable(ex);
-                    } catch (Throwable t) {
-                        LOGGER.warn("doConnect.writeRequest()", t);
-                    }
-                    IOException ioe = new IOException(ex.getMessage());
-                    ioe.initCause(ex);
-                    throw ioe;
+                try {
+                    asyncHandler.onThrowable(ex);
+                } catch (Throwable t) {
+                    LOGGER.warn("doConnect.writeRequest()", t);
                 }
+                IOException ioe = new IOException(ex.getMessage());
+                ioe.initCause(ex);
+                throw ioe;
             }
-            return future;
+        }
+        return future;
+    }
+
+    private ChannelFuture connect(Request request, URI uri, ProxyServer proxy, Bootstrap bootstrap) {
+        InetSocketAddress remoteAddress;
+        if (request.getInetAddress() != null) {
+            remoteAddress = new InetSocketAddress(request.getInetAddress(), AsyncHttpProviderUtils.getPort(uri));
+        } else if (proxy == null || ProxyUtils.avoidProxy(proxy, uri.getHost())) {
+            remoteAddress = new InetSocketAddress(AsyncHttpProviderUtils.getHost(uri), AsyncHttpProviderUtils.getPort(uri));
+        } else {
+            remoteAddress = new InetSocketAddress(proxy.getHost(), proxy.getPort());
         }
 
-        // Do not throw an exception when we need an extra connection for a
-        // redirect.
+        if (request.getLocalAddress() != null) {
+            return bootstrap.connect(remoteAddress, new InetSocketAddress(request.getLocalAddress(), 0));
+        } else {
+            return bootstrap.connect(remoteAddress);
+        }
+    }
+
+    private void performSyncConnect(ChannelFuture channelFuture, URI uri, boolean acquiredConnection, NettyConnectListener<?> cl, AsyncHandler<?> asyncHandler) throws IOException {
+        // FIXME why not use bootstrap.childOption(ChannelOption.CONNECT_TIMEOUT_MILLIS, 10000)?
+        int timeOut = config.getConnectionTimeoutInMs() > 0 ? config.getConnectionTimeoutInMs() : Integer.MAX_VALUE;
+        if (!channelFuture.awaitUninterruptibly(timeOut, TimeUnit.MILLISECONDS)) {
+            if (acquiredConnection) {
+                channels.releaseFreeConnections();
+            }
+            channelFuture.cancel(false);
+            channels.abort(cl.future(), new ConnectException(String.format("Connect operation to %s timed out %s", uri, timeOut)));
+        }
+
+        try {
+            cl.operationComplete(channelFuture);
+        } catch (Exception e) {
+            if (acquiredConnection) {
+                channels.releaseFreeConnections();
+            }
+            IOException ioe = new IOException(e.getMessage());
+            ioe.initCause(e);
+            try {
+                asyncHandler.onThrowable(ioe);
+            } catch (Throwable t) {
+                LOGGER.warn("c.operationComplete()", t);
+            }
+            throw ioe;
+        }
+    }
+
+    private <T> ListenableFuture<T> sendRequestWithNewChannel(Request request, URI uri, ProxyServer proxy, NettyResponseFuture<T> future, AsyncHandler<T> asyncHandler,
+            boolean asyncConnect, boolean reclaimCache) throws IOException {
+
+        boolean useSSl = isSecure(uri) && proxy == null;
+
+        // Do not throw an exception when we need an extra connection for a redirect
+        // FIXME why? This violate the max connection per host handling, right?
         boolean acquiredConnection = !reclaimCache && channels.acquireConnection(asyncHandler);
+        Bootstrap bootstrap = channels.getBootstrap(request.getUrl(), useSSl);
 
         NettyConnectListener<T> cl = new NettyConnectListener.Builder<T>(config, this, request, asyncHandler, future).build(uri);
 
-        boolean avoidProxy = ProxyUtils.avoidProxy(proxyServer, uri.getHost());
-
-        if (useSSl) {
-            channels.constructSSLPipeline(cl.future());
-        }
-
-        Bootstrap bootstrap = channels.getBootstrap(request.getUrl(), useSSl);
-
         ChannelFuture channelFuture;
         try {
-            InetSocketAddress remoteAddress;
-            if (request.getInetAddress() != null) {
-                remoteAddress = new InetSocketAddress(request.getInetAddress(), AsyncHttpProviderUtils.getPort(uri));
-            } else if (proxyServer == null || avoidProxy) {
-                remoteAddress = new InetSocketAddress(AsyncHttpProviderUtils.getHost(uri), AsyncHttpProviderUtils.getPort(uri));
-            } else {
-                remoteAddress = new InetSocketAddress(proxyServer.getHost(), proxyServer.getPort());
-            }
-
-            if (request.getLocalAddress() != null) {
-                channelFuture = bootstrap.connect(remoteAddress, new InetSocketAddress(request.getLocalAddress(), 0));
-            } else {
-                channelFuture = bootstrap.connect(remoteAddress);
-            }
+            channelFuture = connect(request, uri, proxy, bootstrap);
 
         } catch (Throwable t) {
             if (acquiredConnection) {
@@ -223,36 +233,11 @@ public class NettyRequestSender {
 
         // FIXME what does it have to do with the presence of a file?
         if (!asyncConnect && request.getFile() == null) {
-            int timeOut = config.getConnectionTimeoutInMs() > 0 ? config.getConnectionTimeoutInMs() : Integer.MAX_VALUE;
-            if (!channelFuture.awaitUninterruptibly(timeOut, TimeUnit.MILLISECONDS)) {
-                if (acquiredConnection) {
-                    channels.releaseFreeConnections();
-                }
-                // FIXME false or true?
-                channelFuture.cancel(false);
-                channels.abort(cl.future(), new ConnectException(String.format("Connect operation to %s timeout %s", uri, timeOut)));
-            }
-
-            try {
-                cl.operationComplete(channelFuture);
-            } catch (Exception e) {
-                if (acquiredConnection) {
-                    channels.releaseFreeConnections();
-                }
-                IOException ioe = new IOException(e.getMessage());
-                ioe.initCause(e);
-                try {
-                    asyncHandler.onThrowable(ioe);
-                } catch (Throwable t) {
-                    LOGGER.warn("c.operationComplete()", t);
-                }
-                throw ioe;
-            }
+            performSyncConnect(channelFuture, uri, acquiredConnection, cl, asyncHandler);
         } else {
             channelFuture.addListener(cl);
         }
 
-        // FIXME Why non cached???
         LOGGER.debug("\nNon cached request \n{}\n\nusing Channel \n{}\n", cl.future().getNettyRequest(), channelFuture.channel());
 
         if (!cl.future().isCancelled() || !cl.future().isDone()) {
@@ -260,6 +245,29 @@ public class NettyRequestSender {
             cl.future().attachChannel(channelFuture.channel(), false);
         }
         return cl.future();
+    }
+
+    public <T> ListenableFuture<T> sendRequest(final Request request, final AsyncHandler<T> asyncHandler, NettyResponseFuture<T> future, boolean asyncConnect, boolean reclaimCache)
+            throws IOException {
+
+        if (closed.get()) {
+            throw new IOException("Closed");
+        }
+
+        // FIXME really useful? Why not do this check when building the request?
+        if (request.getUrl().startsWith(WEBSOCKET) && !validateWebSocketRequest(request, asyncHandler)) {
+            throw new IOException("WebSocket method must be a GET");
+        }
+
+        URI uri = config.isUseRawUrl() ? request.getRawURI() : request.getURI();
+        ProxyServer proxy = ProxyUtils.getProxyServer(config, request);
+        Channel channel = getCachedChannel(future, uri, request.getConnectionPoolKeyStrategy(), proxy);
+
+        if (channel != null && channel.isOpen() && channel.isActive()) {
+            return sendRequestWithCachedChannel(channel, request, uri, proxy, future, asyncHandler);
+        } else {
+            return sendRequestWithNewChannel(request, uri, proxy, future, asyncHandler, asyncConnect, reclaimCache);
+        }
     }
 
     private void sendFileBody(Channel channel, File file, NettyResponseFuture<?> future) throws IOException {
@@ -477,8 +485,7 @@ public class NettyRequestSender {
         scheduleReaper(future);
     }
 
-    // FIXME Clean up Netty 3: replayRequest's response parameter is unused +
-    // WTF return???
+    // FIXME Clean up Netty 3: replayRequest's response parameter is unused + WTF return???
     public void replayRequest(final NettyResponseFuture<?> future, FilterContext fc, ChannelHandlerContext ctx) throws IOException {
         Request newRequest = fc.getRequest();
         future.setAsyncHandler(fc.getAsyncHandler());
@@ -487,6 +494,6 @@ public class NettyRequestSender {
 
         LOGGER.debug("\n\nReplaying Request {}\n for Future {}\n", newRequest, future);
         channels.drainChannel(ctx, future);
-        execute(newRequest, future);
+        sendRequest(newRequest, future);
     }
 }

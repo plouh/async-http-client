@@ -312,7 +312,7 @@ public class NettyChannelHandler extends ChannelInboundHandlerAdapter {
 
                     Request target = nBuilder.setUrl(newUrl).build();
                     future.setRequest(target);
-                    requestSender.execute(target, future);
+                    requestSender.sendRequest(target, future);
                     return true;
                 }
             } else {
@@ -544,7 +544,7 @@ public class NettyChannelHandler extends ChannelInboundHandlerAdapter {
                     Callback callback = new Callback(future) {
                         public void call() throws Exception {
                             channels.drainChannel(ctx, future);
-                            requestSender.execute(builder.setHeaders(headers).setRealm(nr).build(), future);
+                            requestSender.sendRequest(builder.setHeaders(headers).setRealm(nr).build(), future);
                         }
                     };
 
@@ -589,7 +589,7 @@ public class NettyChannelHandler extends ChannelInboundHandlerAdapter {
 
                     future.setReuseChannel(true);
                     future.setConnectAllowed(true);
-                    requestSender.execute(builder.setHeaders(headers).setRealm(newRealm).build(), future);
+                    requestSender.sendRequest(builder.setHeaders(headers).setRealm(newRealm).build(), future);
                     return true;
                 }
 
@@ -609,7 +609,7 @@ public class NettyChannelHandler extends ChannelInboundHandlerAdapter {
                 }
                 future.setReuseChannel(true);
                 future.setConnectAllowed(false);
-                requestSender.execute(builder.build(), future);
+                requestSender.sendRequest(builder.build(), future);
                 return true;
 
             }

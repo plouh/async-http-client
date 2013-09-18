@@ -41,7 +41,6 @@ public class NettyAsyncHttpProvider implements AsyncHttpProvider {
     private final Channels channels;
     private final NettyRequestSender requestSender;
     private final NettyChannelHandler channelHandler;
-    private final boolean executeConnectAsync;
 
     public NettyAsyncHttpProvider(AsyncHttpClientConfig config) {
 
@@ -54,8 +53,6 @@ public class NettyAsyncHttpProvider implements AsyncHttpProvider {
         requestSender = new NettyRequestSender(closed, config, channels);
         channelHandler = new NettyChannelHandler(config, requestSender, channels, closed);
         channels.configure(channelHandler);
-
-        executeConnectAsync = asyncHttpProviderConfig.isAsyncConnect();
     }
 
     @Override
@@ -82,6 +79,6 @@ public class NettyAsyncHttpProvider implements AsyncHttpProvider {
 
     @Override
     public <T> ListenableFuture<T> execute(Request request, final AsyncHandler<T> asyncHandler) throws IOException {
-        return requestSender.doConnect(request, asyncHandler, null, true, executeConnectAsync, false);
+        return requestSender.sendRequest(request, asyncHandler, null, asyncHttpProviderConfig.isAsyncConnect(), false);
     }
 }

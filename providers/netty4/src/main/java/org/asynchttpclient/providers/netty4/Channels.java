@@ -1,8 +1,6 @@
 package org.asynchttpclient.providers.netty4;
 
-import static org.asynchttpclient.providers.netty4.util.HttpUtil.HTTP;
-import static org.asynchttpclient.providers.netty4.util.HttpUtil.WEBSOCKET;
-import static org.asynchttpclient.providers.netty4.util.HttpUtil.isSecure;
+import static org.asynchttpclient.providers.netty4.util.HttpUtil.*;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandlerContext;
@@ -45,6 +43,7 @@ import org.asynchttpclient.ConnectionPoolKeyStrategy;
 import org.asynchttpclient.ConnectionsPool;
 import org.asynchttpclient.providers.netty4.future.NettyResponseFuture;
 import org.asynchttpclient.providers.netty4.pool.NettyConnectionsPool;
+import org.asynchttpclient.providers.netty4.pool.NonConnectionsPool;
 import org.asynchttpclient.providers.netty4.util.CleanupChannelGroup;
 import org.asynchttpclient.util.SslUtils;
 import org.slf4j.Logger;
@@ -90,8 +89,6 @@ public class Channels {
             return removed;
         }
     };
-
-    private NettyChannelHandler httpProcessor;
 
     public Channels(final AsyncHttpClientConfig config, NettyAsyncHttpProviderConfig asyncHttpProviderConfig) {
 
@@ -177,21 +174,23 @@ public class Channels {
         webSocketBootstrap.option(ChannelOption.CONNECT_TIMEOUT_MILLIS, config.getConnectionTimeoutInMs());
         secureBootstrap.option(ChannelOption.CONNECT_TIMEOUT_MILLIS, config.getConnectionTimeoutInMs());
         secureWebSocketBootstrap.option(ChannelOption.CONNECT_TIMEOUT_MILLIS, config.getConnectionTimeoutInMs());
+    }
 
-        // FIXME What was the meaning of this and what is it still a matter with
-        // Netty4
-        // DefaultChannelFuture.setUseDeadLockChecker(false);
+    private SSLEngine createSSLEngine() throws IOException, GeneralSecurityException {
+        SSLEngine sslEngine = config.getSSLEngineFactory().newSSLEngine();
+        if (sslEngine == null) {
+            sslEngine = SslUtils.getSSLEngine();
+        }
+        return sslEngine;
     }
 
     public void configure(final NettyChannelHandler httpProcessor) {
-        this.httpProcessor = httpProcessor;
 
-        ChannelInitializer<Channel> httpChannelInitializer = new ChannelInitializer<Channel>() {
-
+        plainBootstrap.handler(new ChannelInitializer<Channel>() {
             @Override
             protected void initChannel(Channel ch) throws Exception {
                 ChannelPipeline pipeline = ch.pipeline()//
-                .addLast(HTTP_HANDLER, newHttpClientCodec());
+                        .addLast(HTTP_HANDLER, newHttpClientCodec());
 
                 if (config.getRequestCompressionLevel() > 0) {
                     pipeline.addLast(DEFLATER_HANDLER, new HttpContentCompressor(config.getRequestCompressionLevel()));
@@ -201,36 +200,67 @@ public class Channels {
                     pipeline.addLast(INFLATER_HANDLER, new HttpContentDecompressor());
                 }
                 pipeline.addLast(CHUNKED_WRITER_HANDLER, new ChunkedWriteHandler())//
-                .addLast(AHC_HANDLER, httpProcessor);
+                        .addLast(AHC_HANDLER, httpProcessor);
 
                 if (asyncHttpProviderConfig.getHttpAdditionalChannelInitializer() != null) {
                     asyncHttpProviderConfig.getHttpAdditionalChannelInitializer().initChannel(ch);
                 }
             }
-        };
+        });
 
-        ChannelInitializer<Channel> webSocketChannelInitializer = new ChannelInitializer<Channel>() {
+        webSocketBootstrap.handler(new ChannelInitializer<Channel>() {
             @Override
             protected void initChannel(Channel ch) throws Exception {
                 ch.pipeline()//
-                .addLast(HTTP_DECODER_HANDLER, new HttpResponseDecoder())//
-                .addLast(HTTP_ENCODER_HANDLER, new HttpRequestEncoder())//
-                .addLast(AHC_HANDLER, httpProcessor);
+                        .addLast(HTTP_DECODER_HANDLER, new HttpResponseDecoder())//
+                        .addLast(HTTP_ENCODER_HANDLER, new HttpRequestEncoder())//
+                        .addLast(AHC_HANDLER, httpProcessor);
 
                 if (asyncHttpProviderConfig.getWsAdditionalChannelInitializer() != null) {
                     asyncHttpProviderConfig.getWsAdditionalChannelInitializer().initChannel(ch);
                 }
             }
-        };
+        });
 
-        plainBootstrap.handler(httpChannelInitializer);
-        webSocketBootstrap.handler(webSocketChannelInitializer);
+        secureBootstrap.handler(new ChannelInitializer<Channel>() {
+
+            @Override
+            protected void initChannel(Channel ch) throws Exception {
+                ChannelPipeline pipeline = ch.pipeline()//
+                        .addLast(SSL_HANDLER, new SslHandler(createSSLEngine()))//
+                        .addLast(HTTP_HANDLER, newHttpClientCodec());
+
+                if (config.isCompressionEnabled()) {
+                    pipeline.addLast(INFLATER_HANDLER, new HttpContentDecompressor());
+                }
+                pipeline.addLast(CHUNKED_WRITER_HANDLER, new ChunkedWriteHandler())//
+                        .addLast(AHC_HANDLER, httpProcessor);
+
+                if (asyncHttpProviderConfig.getHttpsAdditionalChannelInitializer() != null) {
+                    asyncHttpProviderConfig.getHttpsAdditionalChannelInitializer().initChannel(ch);
+                }
+            }
+        });
+
+        secureWebSocketBootstrap.handler(new ChannelInitializer<Channel>() {
+
+            @Override
+            protected void initChannel(Channel ch) throws Exception {
+                ch.pipeline()//
+                        .addLast(SSL_HANDLER, new SslHandler(createSSLEngine()))//
+                        .addLast(HTTP_DECODER_HANDLER, new HttpResponseDecoder())//
+                        .addLast(HTTP_ENCODER_HANDLER, new HttpRequestEncoder())//
+                        .addLast(AHC_HANDLER, httpProcessor);
+
+                if (asyncHttpProviderConfig.getWssAdditionalChannelInitializer() != null) {
+                    asyncHttpProviderConfig.getWssAdditionalChannelInitializer().initChannel(ch);
+                }
+            }
+        });
     }
 
     public Bootstrap getBootstrap(String url, boolean useSSl) {
-        Bootstrap bootstrap = url.startsWith(WEBSOCKET) ? (useSSl ? secureWebSocketBootstrap : webSocketBootstrap) : (useSSl ? secureBootstrap : plainBootstrap);
-
-        return bootstrap;
+        return url.startsWith(WEBSOCKET) ? (useSSl ? secureWebSocketBootstrap : webSocketBootstrap) : (useSSl ? secureBootstrap : plainBootstrap);
     }
 
     public void close() {
@@ -248,68 +278,7 @@ public class Channels {
         }
     }
 
-    void constructSSLPipeline(final NettyResponseFuture<?> future) {
-
-        secureBootstrap.handler(new ChannelInitializer<Channel>() {
-
-            @Override
-            protected void initChannel(Channel ch) throws Exception {
-                ChannelPipeline pipeline = ch.pipeline();
-
-                try {
-                    pipeline.addLast(SSL_HANDLER, new SslHandler(createSSLEngine()));
-                } catch (Throwable ex) {
-                    LOGGER.error("Channel {} could not add SslHandler {}", ch, ex);
-                    abort(future, ex);
-                }
-
-                pipeline.addLast(HTTP_HANDLER, newHttpClientCodec());
-
-                if (config.isCompressionEnabled()) {
-                    pipeline.addLast(INFLATER_HANDLER, new HttpContentDecompressor());
-                }
-                pipeline.addLast(CHUNKED_WRITER_HANDLER, new ChunkedWriteHandler())//
-                .addLast(AHC_HANDLER, httpProcessor);
-
-                if (asyncHttpProviderConfig.getHttpsAdditionalChannelInitializer() != null) {
-                    asyncHttpProviderConfig.getHttpsAdditionalChannelInitializer().initChannel(ch);
-                }
-            }
-        });
-
-        secureWebSocketBootstrap.handler(new ChannelInitializer<Channel>() {
-
-            @Override
-            protected void initChannel(Channel ch) throws Exception {
-                ChannelPipeline pipeline = ch.pipeline();
-
-                try {
-                    pipeline.addLast(SSL_HANDLER, new SslHandler(createSSLEngine()));
-                } catch (Throwable ex) {
-                    LOGGER.error("Channel {} could not add SslHandler {}", ch, ex);
-                    abort(future, ex);
-                }
-
-                pipeline.addLast(HTTP_DECODER_HANDLER, new HttpResponseDecoder())//
-                .addLast(HTTP_ENCODER_HANDLER, new HttpRequestEncoder())//
-                .addLast(AHC_HANDLER, httpProcessor);
-
-                if (asyncHttpProviderConfig.getWssAdditionalChannelInitializer() != null) {
-                    asyncHttpProviderConfig.getWssAdditionalChannelInitializer().initChannel(ch);
-                }
-            }
-        });
-    }
-
-    private SSLEngine createSSLEngine() throws IOException, GeneralSecurityException {
-        SSLEngine sslEngine = config.getSSLEngineFactory().newSSLEngine();
-        if (sslEngine == null) {
-            sslEngine = SslUtils.getSSLEngine();
-        }
-        return sslEngine;
-    }
-
-    // FIXME what for?
+    // some servers can use the same port for HTTP and HTTPS
     public Channel verifyChannelPipeline(Channel channel, String scheme) throws IOException, GeneralSecurityException {
 
         if (channel.pipeline().get(SSL_HANDLER) != null && HTTP.equalsIgnoreCase(scheme)) {
@@ -508,27 +477,5 @@ public class Channels {
 
     public static void setDefaultAttribute(ChannelHandlerContext ctx, Object o) {
         ctx.attr(DEFAULT_ATTRIBUTE).set(o);
-    }
-
-    private static class NonConnectionsPool implements ConnectionsPool<String, Channel> {
-
-        public boolean offer(String uri, Channel connection) {
-            return false;
-        }
-
-        public Channel poll(String uri) {
-            return null;
-        }
-
-        public boolean removeAll(Channel connection) {
-            return false;
-        }
-
-        public boolean canCacheConnection() {
-            return true;
-        }
-
-        public void destroy() {
-        }
     }
 }
