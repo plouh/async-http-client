@@ -312,7 +312,8 @@ public class NettyChannelHandler extends ChannelInboundHandlerAdapter {
 
                     Request target = nBuilder.setUrl(newUrl).build();
                     future.setRequest(target);
-                    requestSender.sendRequest(target, future);
+                    // FIXME why not reuse the channel is same host?
+                    requestSender.sendNextRequest(target, future);
                     return true;
                 }
             } else {
@@ -466,8 +467,8 @@ public class NettyChannelHandler extends ChannelInboundHandlerAdapter {
             }
         }
 
-        private boolean applyResponseFiltersAndReplayRequest(ChannelHandlerContext ctx, NettyResponseFuture<?> future, HttpResponseStatus status, HttpResponseHeaders responseHeaders)
-                throws IOException {
+        private boolean applyResponseFiltersAndReplayRequest(ChannelHandlerContext ctx, NettyResponseFuture<?> future, HttpResponseStatus status,
+                HttpResponseHeaders responseHeaders) throws IOException {
 
             AsyncHandler handler = future.getAsyncHandler();
             FilterContext fc = new FilterContext.FilterContextBuilder().asyncHandler(handler).request(future.getRequest()).responseStatus(status).responseHeaders(responseHeaders)
@@ -544,7 +545,7 @@ public class NettyChannelHandler extends ChannelInboundHandlerAdapter {
                     Callback callback = new Callback(future) {
                         public void call() throws Exception {
                             channels.drainChannel(ctx, future);
-                            requestSender.sendRequest(builder.setHeaders(headers).setRealm(nr).build(), future);
+                            requestSender.sendNextRequest(builder.setHeaders(headers).setRealm(nr).build(), future);
                         }
                     };
 
@@ -562,7 +563,7 @@ public class NettyChannelHandler extends ChannelInboundHandlerAdapter {
             } else if (statusCode == CONTINUE.code()) {
                 future.getAndSetWriteHeaders(false);
                 future.getAndSetWriteBody(true);
-                // FIXME is this necessary
+                // FIXME why not reuse the channel?
                 requestSender.writeRequest(ctx.channel(), config, future);
                 return true;
 
@@ -589,7 +590,7 @@ public class NettyChannelHandler extends ChannelInboundHandlerAdapter {
 
                     future.setReuseChannel(true);
                     future.setConnectAllowed(true);
-                    requestSender.sendRequest(builder.setHeaders(headers).setRealm(newRealm).build(), future);
+                    requestSender.sendNextRequest(builder.setHeaders(headers).setRealm(newRealm).build(), future);
                     return true;
                 }
 
@@ -609,7 +610,7 @@ public class NettyChannelHandler extends ChannelInboundHandlerAdapter {
                 }
                 future.setReuseChannel(true);
                 future.setConnectAllowed(false);
-                requestSender.sendRequest(builder.build(), future);
+                requestSender.sendNextRequest(builder.build(), future);
                 return true;
 
             }

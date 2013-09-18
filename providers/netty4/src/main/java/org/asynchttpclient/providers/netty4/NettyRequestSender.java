@@ -88,7 +88,7 @@ public class NettyRequestSender {
                 LOGGER.debug("Trying to recover request {}\n", future.getNettyRequest());
 
                 try {
-                    sendRequest(future.getRequest(), future);
+                    sendNextRequest(future.getRequest(), future);
                     success = true;
 
                 } catch (IOException iox) {
@@ -103,9 +103,8 @@ public class NettyRequestSender {
         return success;
     }
 
-    // FIXME Netty 3: only called from nextRequest, useCache, asyncConnect and
-    // reclaimCache always passed as true
-    public <T> void sendRequest(final Request request, final NettyResponseFuture<T> f) throws IOException {
+    public <T> void sendNextRequest(final Request request, final NettyResponseFuture<T> f) throws IOException {
+        // FIXME Why is sendNextRequest always asyncConnect?
         sendRequest(request, f.getAsyncHandler(), f, true, true);
     }
 
@@ -494,6 +493,6 @@ public class NettyRequestSender {
 
         LOGGER.debug("\n\nReplaying Request {}\n for Future {}\n", newRequest, future);
         channels.drainChannel(ctx, future);
-        sendRequest(newRequest, future);
+        sendNextRequest(newRequest, future);
     }
 }
