@@ -258,7 +258,7 @@ public final class NettyResponseFuture<V> extends AbstractListenableFuture<V> {
         currentRetry.set(maxRetry);
         if (exEx.get() == null && !contentProcessed.getAndSet(true)) {
             try {
-                update = (V) asyncHandler.onCompleted();
+                update = asyncHandler.onCompleted();
             } catch (Throwable ex) {
                 if (!throwableCalled.getAndSet(true)) {
                     try {

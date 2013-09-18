@@ -466,10 +466,8 @@ public class NettyChannelHandler extends ChannelInboundHandlerAdapter {
             }
         }
 
-        private boolean applyResponseFiltersAndReplayRequest(ChannelHandlerContext ctx, NettyResponseFuture future, HttpResponseStatus status, HttpResponseHeaders responseHeaders)
+        private boolean applyResponseFiltersAndReplayRequest(ChannelHandlerContext ctx, NettyResponseFuture<?> future, HttpResponseStatus status, HttpResponseHeaders responseHeaders)
                 throws IOException {
-
-            boolean replayed = false;
 
             AsyncHandler handler = future.getAsyncHandler();
             FilterContext fc = new FilterContext.FilterContextBuilder().asyncHandler(handler).request(future.getRequest()).responseStatus(status).responseHeaders(responseHeaders)
@@ -478,7 +476,7 @@ public class NettyChannelHandler extends ChannelInboundHandlerAdapter {
             for (ResponseFilter asyncFilter : config.getResponseFilters()) {
                 try {
                     fc = asyncFilter.filter(fc);
-                    // FIXME Is it work protecting against this?
+                    // FIXME Is it worth protecting against this?
                     if (fc == null) {
                         throw new NullPointerException("FilterContext is null");
                     }
@@ -494,9 +492,9 @@ public class NettyChannelHandler extends ChannelInboundHandlerAdapter {
             // The request has changed
             if (fc.replayRequest()) {
                 requestSender.replayRequest(future, fc, ctx);
-                replayed = true;
+                return true;
             }
-            return replayed;
+            return false;
         }
 
         private boolean handleResponseAndExit(final ChannelHandlerContext ctx, final NettyResponseFuture<?> future, AsyncHandler<?> handler, HttpRequest nettyRequest,

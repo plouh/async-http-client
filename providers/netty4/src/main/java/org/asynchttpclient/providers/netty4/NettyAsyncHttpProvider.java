@@ -46,11 +46,9 @@ public class NettyAsyncHttpProvider implements AsyncHttpProvider {
     public NettyAsyncHttpProvider(AsyncHttpClientConfig config) {
 
         this.config = config;
-        if (config.getAsyncHttpProviderConfig() instanceof NettyAsyncHttpProviderConfig) {
-            asyncHttpProviderConfig = NettyAsyncHttpProviderConfig.class.cast(config.getAsyncHttpProviderConfig());
-        } else {
-            asyncHttpProviderConfig = new NettyAsyncHttpProviderConfig();
-        }
+        asyncHttpProviderConfig = config.getAsyncHttpProviderConfig() instanceof NettyAsyncHttpProviderConfig ? //
+        NettyAsyncHttpProviderConfig.class.cast(config.getAsyncHttpProviderConfig())
+                : new NettyAsyncHttpProviderConfig();
 
         channels = new Channels(config, asyncHttpProviderConfig);
         requestSender = new NettyRequestSender(closed, config, channels);
