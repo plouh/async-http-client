@@ -86,12 +86,11 @@ public class NettyChannelHandler extends ChannelInboundHandlerAdapter {
 
         Object attribute = Channels.getDefaultAttribute(ctx);
 
-        if (attribute instanceof Callback) {
+        // FIXME is || !(e instanceof HttpContent) necessary?
+        if (attribute instanceof Callback && (e instanceof LastHttpContent /*|| !(e instanceof HttpContent)*/)) {
             Callback ac = (Callback) attribute;
-            if (e instanceof LastHttpContent || !(e instanceof HttpContent)) {
-                ac.call();
-                Channels.setDefaultAttribute(ctx, DiscardEvent.INSTANCE);
-            }
+            ac.call();
+            Channels.setDefaultAttribute(ctx, DiscardEvent.INSTANCE);
 
         } else if (attribute instanceof NettyResponseFuture) {
             Protocol p = (ctx.pipeline().get(HttpClientCodec.class) != null ? httpProtocol : webSocketProtocol);
