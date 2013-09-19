@@ -20,7 +20,6 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.RandomAccessFile;
-import java.net.ConnectException;
 import java.net.InetSocketAddress;
 import java.net.URI;
 import java.util.Map;
@@ -179,28 +178,29 @@ public class NettyRequestSender {
     }
 
     private void performSyncConnect(ChannelFuture channelFuture, URI uri, boolean acquiredConnection, NettyConnectListener<?> cl, AsyncHandler<?> asyncHandler) throws IOException {
-        // FIXME why not use bootstrap.childOption(ChannelOption.CONNECT_TIMEOUT_MILLIS, 10000)?
-        int timeOut = config.getConnectionTimeoutInMs() > 0 ? config.getConnectionTimeoutInMs() : Integer.MAX_VALUE;
-        if (!channelFuture.awaitUninterruptibly(timeOut, TimeUnit.MILLISECONDS)) {
-            if (acquiredConnection) {
-                channels.releaseFreeConnections();
-            }
-            channelFuture.cancel(false);
-            channels.abort(cl.future(), new ConnectException(String.format("Connect operation to %s timed out %s", uri, timeOut)));
-        }
 
         try {
-            cl.operationComplete(channelFuture);
-        } catch (Exception e) {
-            if (acquiredConnection) {
+            channelFuture.syncUninterruptibly();
+            cl.onFutureSuccess(channelFuture.channel());
+
+        } catch (Throwable t) {
+            if (t.getCause() != null)
+                t = t.getCause();
+
+            IOException ioe = null;
+            if (t instanceof IOException)
+                ioe = IOException.class.cast(t);
+            else
+                ioe = new IOException(t.getMessage(), t);
+
+            if (acquiredConnection)
                 channels.releaseFreeConnections();
-            }
-            IOException ioe = new IOException(e.getMessage());
-            ioe.initCause(e);
+
+            channels.abort(cl.future(), ioe);
             try {
                 asyncHandler.onThrowable(ioe);
-            } catch (Throwable t) {
-                LOGGER.warn("c.operationComplete()", t);
+            } catch (Throwable t2) {
+                LOGGER.warn("asyncHandler.onThrowable()", t2);
             }
             throw ioe;
         }

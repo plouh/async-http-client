@@ -27,8 +27,6 @@ import java.net.ConnectException;
 import java.net.URI;
 import java.nio.channels.ClosedChannelException;
 
-import javax.net.ssl.HostnameVerifier;
-
 import org.asynchttpclient.AsyncHandler;
 import org.asynchttpclient.AsyncHttpClientConfig;
 import org.asynchttpclient.ProxyServer;
@@ -60,24 +58,20 @@ final class NettyConnectListener<T> implements ChannelFutureListener {
         return future;
     }
 
-    private void onFutureSuccess(final Channel channel) throws Exception {
+    public void onFutureSuccess(final Channel channel) throws ConnectException {
         Channels.setDefaultAttribute(channel, future);
         SslHandler sslHandler = Channels.getSslHandler(channel);
 
-        if (sslHandler != null) {
-            // FIXME done on connect or on every request?
-            HostnameVerifier v = config.getHostnameVerifier();
-            if (!v.verify(future.getURI().getHost(), sslHandler.engine().getSession())) {
-                ConnectException exception = new ConnectException("HostnameVerifier exception.");
-                future.abort(exception);
-                throw exception;
-            }
+        if (sslHandler != null && !config.getHostnameVerifier().verify(future.getURI().getHost(), sslHandler.engine().getSession())) {
+            ConnectException exception = new ConnectException("HostnameVerifier exception");
+            future.abort(exception);
+            throw exception;
         }
 
         requestSender.writeRequest(channel, config, future);
     }
 
-    private void onFutureFailure(Channel channel, Throwable cause) throws Exception {
+    public void onFutureFailure(Channel channel, Throwable cause) {
 
         logger.debug("Trying to recover a dead cached channel {} with a retry value of {} ", channel, future.canRetry());
         if (future.canRetry() && cause != null

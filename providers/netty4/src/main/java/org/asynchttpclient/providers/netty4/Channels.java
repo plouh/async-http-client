@@ -169,11 +169,11 @@ public class Channels {
             }
         }
 
-        // FIXME clean up
-        plainBootstrap.option(ChannelOption.CONNECT_TIMEOUT_MILLIS, config.getConnectionTimeoutInMs());
-        webSocketBootstrap.option(ChannelOption.CONNECT_TIMEOUT_MILLIS, config.getConnectionTimeoutInMs());
-        secureBootstrap.option(ChannelOption.CONNECT_TIMEOUT_MILLIS, config.getConnectionTimeoutInMs());
-        secureWebSocketBootstrap.option(ChannelOption.CONNECT_TIMEOUT_MILLIS, config.getConnectionTimeoutInMs());
+        int timeOut = config.getConnectionTimeoutInMs() > 0 ? config.getConnectionTimeoutInMs() : Integer.MAX_VALUE;
+        plainBootstrap.option(ChannelOption.CONNECT_TIMEOUT_MILLIS, timeOut);
+        webSocketBootstrap.option(ChannelOption.CONNECT_TIMEOUT_MILLIS, timeOut);
+        secureBootstrap.option(ChannelOption.CONNECT_TIMEOUT_MILLIS, timeOut);
+        secureWebSocketBootstrap.option(ChannelOption.CONNECT_TIMEOUT_MILLIS, timeOut);
     }
 
     private SSLEngine createSSLEngine() throws IOException, GeneralSecurityException {
