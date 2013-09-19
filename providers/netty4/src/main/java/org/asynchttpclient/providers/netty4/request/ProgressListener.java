@@ -102,7 +102,7 @@ public class ProgressListener implements ChannelProgressiveFutureListener {
     @Override
     public void operationProgressed(ChannelProgressiveFuture f, long progress, long total) {
         future.touch();
-        if (asyncHandler instanceof ProgressAsyncHandler) {
+        if (!notifyHeaders && asyncHandler instanceof ProgressAsyncHandler) {
             long lastProgressValue = lastProgress.getAndSet(progress);
             ProgressAsyncHandler.class.cast(asyncHandler).onContentWriteProgress(progress - lastProgressValue, progress, total);
         }
