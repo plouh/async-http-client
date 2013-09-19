@@ -38,8 +38,8 @@ import org.asynchttpclient.ConnectionPoolKeyStrategy;
 import org.asynchttpclient.ProxyServer;
 import org.asynchttpclient.Request;
 import org.asynchttpclient.listenable.AbstractListenableFuture;
-import org.asynchttpclient.providers.netty4.Channels;
 import org.asynchttpclient.providers.netty4.DiscardEvent;
+import org.asynchttpclient.providers.netty4.channel.Channels;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

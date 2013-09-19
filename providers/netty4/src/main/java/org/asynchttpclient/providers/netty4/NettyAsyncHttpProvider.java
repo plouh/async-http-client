@@ -28,6 +28,9 @@ import org.asynchttpclient.HttpResponseStatus;
 import org.asynchttpclient.ListenableFuture;
 import org.asynchttpclient.Request;
 import org.asynchttpclient.Response;
+import org.asynchttpclient.providers.netty4.channel.Channels;
+import org.asynchttpclient.providers.netty4.handler.NettyChannelHandler;
+import org.asynchttpclient.providers.netty4.request.NettyRequestSender;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

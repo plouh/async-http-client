@@ -1,4 +1,19 @@
-package org.asynchttpclient.providers.netty4;
+/*
+ * Copyright 2010-2013 Ning, Inc.
+ *
+ * Ning licenses this file to you under the Apache License, version 2.0
+ * (the "License"); you may not use this file except in compliance with the
+ * License.  You may obtain a copy of the License at:
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ */
+package org.asynchttpclient.providers.netty4.request;
 
 import static org.asynchttpclient.providers.netty4.util.HttpUtil.isNTLM;
 import static org.asynchttpclient.providers.netty4.util.HttpUtil.isSecure;
@@ -32,6 +47,7 @@ import org.asynchttpclient.multipart.MultipartRequestEntity;
 import org.asynchttpclient.ntlm.NTLMEngine;
 import org.asynchttpclient.ntlm.NTLMEngineException;
 import org.asynchttpclient.org.jboss.netty.handler.codec.http.CookieEncoder;
+import org.asynchttpclient.providers.netty4.NettyAsyncHttpProvider;
 import org.asynchttpclient.providers.netty4.spnego.SpnegoEngine;
 import org.asynchttpclient.providers.netty4.ws.WebSocketUtil;
 import org.asynchttpclient.util.AsyncHttpProviderUtils;
@@ -146,9 +162,7 @@ public class NettyRequests {
                     String msg = NTLMEngine.INSTANCE.generateType1Msg("NTLM " + domain, authHost);
                     headers.put(HttpHeaders.Names.AUTHORIZATION, "NTLM " + msg);
                 } catch (NTLMEngineException e) {
-                    IOException ie = new IOException();
-                    ie.initCause(e);
-                    throw ie;
+                    throw new IOException(e);
                 }
                 break;
             case KERBEROS:
@@ -158,9 +172,7 @@ public class NettyRequests {
                 try {
                     challengeHeader = SpnegoEngine.instance().generateToken(server);
                 } catch (Throwable e) {
-                    IOException ie = new IOException();
-                    ie.initCause(e);
-                    throw ie;
+                    throw new IOException(e);
                 }
                 headers.put(HttpHeaders.Names.AUTHORIZATION, "Negotiate " + challengeHeader);
                 break;
@@ -258,11 +270,11 @@ public class NettyRequests {
                     }
 
                 } else if (request.getParts() != null) {
+                    // FIXME use Netty multipart
                     MultipartRequestEntity mre = AsyncHttpProviderUtils.createMultipartRequestEntity(request.getParts(), request.getHeaders());
 
                     headers.put(HttpHeaders.Names.CONTENT_TYPE, mre.getContentType());
                     headers.put(HttpHeaders.Names.CONTENT_LENGTH, mre.getContentLength());
-
                     hasDeferredContent = true;
 
                 } else if (request.getFile() != null) {

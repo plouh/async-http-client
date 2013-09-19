@@ -14,7 +14,7 @@
  * under the License.
  *
  */
-package org.asynchttpclient.providers.netty4;
+package org.asynchttpclient.providers.netty4.request;
 
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
@@ -31,6 +31,7 @@ import org.asynchttpclient.AsyncHandler;
 import org.asynchttpclient.AsyncHttpClientConfig;
 import org.asynchttpclient.ProxyServer;
 import org.asynchttpclient.Request;
+import org.asynchttpclient.providers.netty4.channel.Channels;
 import org.asynchttpclient.providers.netty4.future.NettyResponseFuture;
 import org.asynchttpclient.providers.netty4.future.NettyResponseFutures;
 import org.asynchttpclient.util.ProxyUtils;

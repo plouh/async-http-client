@@ -1,4 +1,19 @@
-package org.asynchttpclient.providers.netty4;
+/*
+ * Copyright 2010-2013 Ning, Inc.
+ *
+ * Ning licenses this file to you under the Apache License, version 2.0
+ * (the "License"); you may not use this file except in compliance with the
+ * License.  You may obtain a copy of the License at:
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ */
+package org.asynchttpclient.providers.netty4.request;
 
 import static org.asynchttpclient.providers.netty4.util.HttpUtil.*;
 import io.netty.bootstrap.Bootstrap;
@@ -39,14 +54,19 @@ import org.asynchttpclient.ProxyServer;
 import org.asynchttpclient.RandomAccessBody;
 import org.asynchttpclient.Request;
 import org.asynchttpclient.filter.FilterContext;
+import org.asynchttpclient.filter.FilterException;
+import org.asynchttpclient.filter.IOExceptionFilter;
 import org.asynchttpclient.generators.InputStreamBodyGenerator;
 import org.asynchttpclient.listener.TransferCompletionHandler;
 import org.asynchttpclient.listener.TransferCompletionHandler.TransferAdapter;
 import org.asynchttpclient.multipart.MultipartBody;
-import org.asynchttpclient.providers.netty4.FeedableBodyGenerator.FeedListener;
+import org.asynchttpclient.providers.netty4.Constants;
+import org.asynchttpclient.providers.netty4.channel.Channels;
 import org.asynchttpclient.providers.netty4.future.FutureReaper;
 import org.asynchttpclient.providers.netty4.future.NettyResponseFuture;
 import org.asynchttpclient.providers.netty4.future.NettyResponseFutures;
+import org.asynchttpclient.providers.netty4.request.FeedableBodyGenerator.FeedListener;
+import org.asynchttpclient.providers.netty4.request.NettyConnectListener.Builder;
 import org.asynchttpclient.util.AsyncHttpProviderUtils;
 import org.asynchttpclient.util.ProxyUtils;
 import org.asynchttpclient.websocket.WebSocketUpgradeHandler;
@@ -100,6 +120,29 @@ public class NettyRequestSender {
             }
         }
         return success;
+    }
+    
+    public boolean applyIoExceptionFiltersAndReplayRequest(ChannelHandlerContext ctx, NettyResponseFuture<?> future, IOException e) throws IOException {
+
+        boolean replayed = false;
+
+        FilterContext<?> fc = new FilterContext.FilterContextBuilder().asyncHandler(future.getAsyncHandler()).request(future.getRequest()).ioException(e).build();
+        for (IOExceptionFilter asyncFilter : config.getIOExceptionFilters()) {
+            try {
+                fc = asyncFilter.filter(fc);
+                if (fc == null) {
+                    throw new NullPointerException("FilterContext is null");
+                }
+            } catch (FilterException efe) {
+                channels.abort(future, efe);
+            }
+        }
+
+        if (fc.replayRequest()) {
+            replayRequest(future, fc, ctx);
+            replayed = true;
+        }
+        return replayed;
     }
 
     public <T> void sendNextRequest(final Request request, final NettyResponseFuture<T> f) throws IOException {
@@ -420,7 +463,7 @@ public class NettyRequestSender {
         }
     }
 
-    protected final <T> void writeRequest(final Channel channel, final AsyncHttpClientConfig config, final NettyResponseFuture<T> future) {
+    public final <T> void writeRequest(final Channel channel, final AsyncHttpClientConfig config, final NettyResponseFuture<T> future) {
         try {
             // If the channel is dead because it was pooled and the remote
             // server decided to close it, we just let it go and the
