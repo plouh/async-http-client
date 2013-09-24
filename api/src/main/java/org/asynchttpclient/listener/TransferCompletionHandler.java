@@ -60,7 +60,7 @@ public class TransferCompletionHandler extends AsyncCompletionHandlerBase {
     private final static Logger logger = LoggerFactory.getLogger(TransferCompletionHandler.class);
     private final ConcurrentLinkedQueue<TransferListener> listeners = new ConcurrentLinkedQueue<TransferListener>();
     private final boolean accumulateResponseBytes;
-    private TransferAdapter transferAdapter;
+    private FluentCaseInsensitiveStringsMap headers;
 
     /**
      * Create a TransferCompletionHandler that will not accumulate bytes. The resulting {@link org.asynchttpclient.Response#getResponseBody()},
@@ -106,13 +106,13 @@ public class TransferCompletionHandler extends AsyncCompletionHandlerBase {
     }
 
     /**
-     * Associate a {@link TransferCompletionHandler.TransferAdapter} with this listener.
+     * Set headers to this listener.
      * 
-     * @param transferAdapter
-     *            {@link TransferAdapter}
+     * @param headers
+     *            {@link FluentCaseInsensitiveStringsMap}
      */
-    public void transferAdapter(TransferAdapter transferAdapter) {
-        this.transferAdapter = transferAdapter;
+    public void headers(FluentCaseInsensitiveStringsMap headers) {
+        this.headers = headers;
     }
 
     @Override
@@ -139,8 +139,8 @@ public class TransferCompletionHandler extends AsyncCompletionHandlerBase {
 
     @Override
     public STATE onHeaderWriteCompleted() {
-        if (transferAdapter != null) {
-            fireOnHeadersSent(transferAdapter.getHeaders());
+        if (headers != null) {
+            fireOnHeadersSent(headers);
         }
         return STATE.CONTINUE;
     }
@@ -213,18 +213,6 @@ public class TransferCompletionHandler extends AsyncCompletionHandlerBase {
             } catch (Throwable t2) {
                 logger.warn("onThrowable", t2);
             }
-        }
-    }
-
-    public static class TransferAdapter {
-        private final FluentCaseInsensitiveStringsMap headers;
-
-        public TransferAdapter(FluentCaseInsensitiveStringsMap headers) {
-            this.headers = headers;
-        }
-
-        public FluentCaseInsensitiveStringsMap getHeaders() {
-            return headers;
         }
     }
 }

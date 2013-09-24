@@ -59,7 +59,6 @@ import org.asynchttpclient.filter.FilterException;
 import org.asynchttpclient.filter.IOExceptionFilter;
 import org.asynchttpclient.generators.InputStreamBodyGenerator;
 import org.asynchttpclient.listener.TransferCompletionHandler;
-import org.asynchttpclient.listener.TransferCompletionHandler.TransferAdapter;
 import org.asynchttpclient.multipart.MultipartBody;
 import org.asynchttpclient.providers.netty4.Constants;
 import org.asynchttpclient.providers.netty4.channel.Channels;
@@ -451,7 +450,7 @@ public class NettyRequestSender {
             h.add(entries.getKey(), entries.getValue());
         }
 
-        TransferCompletionHandler.class.cast(handler).transferAdapter(new TransferAdapter(h));
+        TransferCompletionHandler.class.cast(handler).headers(h);
     }
 
     private void scheduleReaper(NettyResponseFuture<?> future) {

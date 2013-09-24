@@ -43,7 +43,6 @@ import org.asynchttpclient.filter.IOExceptionFilter;
 import org.asynchttpclient.filter.ResponseFilter;
 import org.asynchttpclient.generators.InputStreamBodyGenerator;
 import org.asynchttpclient.listener.TransferCompletionHandler;
-import org.asynchttpclient.listener.TransferCompletionHandler.TransferAdapter;
 import org.asynchttpclient.multipart.MultipartBody;
 import org.asynchttpclient.multipart.MultipartRequestEntity;
 import org.asynchttpclient.ntlm.NTLMEngine;
@@ -452,7 +451,7 @@ public class NettyAsyncHttpProvider extends SimpleChannelUpstreamHandler impleme
                     }
                 }
 
-                TransferCompletionHandler.class.cast(future.getAsyncHandler()).transferAdapter(new TransferAdapter(h));
+                TransferCompletionHandler.class.cast(future.getAsyncHandler()).headers(h);
             }
 
             // Leave it to true.
